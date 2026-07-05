@@ -1,0 +1,52 @@
+# Base: full_example.yaml, with the LE hinge moved aft of the main spar - clearance.
+expected_error_code: le_hinge_too_far_aft
+
+planform:
+  span_mm: 2400
+  segments:
+    - {name: whole, y_end_frac: 1.00, dihedral_deg: 0.0, sweep_le_deg: 0.0}
+  stations:
+    - {y_frac: 0.0, chord_mm: 320, twist_deg: 0.0, airfoil: naca23012}
+    - {y_frac: 1.0, chord_mm: 180, twist_deg: -2.0, airfoil: "uiuc:sd7037"}
+  twist_axis_xc: 0.25
+  mirror: true
+
+airfoils:
+  sources: [naca4, naca5, uiuc, dat_upload]
+  resample_points: 199
+  te_min_thickness_mm: 0.8
+
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 2}
+  core: {material: rohacell_31, thickness_mm: 3.0}
+  ramp_ratio: 3.0
+
+spars:
+  - name: main
+    xc_root: 0.25
+    xc_tip: 0.25
+    web: {material: cfrp_200gsm_twill, plies: 4}
+    tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}
+  - name: rear
+    xc_root: 0.70
+    xc_tip: 0.70
+    web: {material: cfrp_200gsm_twill, plies: 3}
+    tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}
+
+ribs:
+  count: 9
+  construction: {material: cfrp_200gsm_twill, plies: 3}
+  lightening_holes: {enabled: true, margin_mm: 8}
+
+le_droop:
+  enabled: true
+  span_start_frac: 0.10
+  span_end_frac: 0.55
+  hinge_xc_start: 0.30   # main spar xc is 0.25 - 0.02 clearance = 0.23 maximum
+  hinge_xc_end: 0.30
+  gap_mm: 1.5
+  max_deflection_deg: 20
+  hinges: {mode: generated, count: 2}
+
+output:
+  formats: [step, stl, gltf]

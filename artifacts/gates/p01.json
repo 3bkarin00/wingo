@@ -1,0 +1,24 @@
+{
+  "phase": "p01",
+  "pass": true,
+  "metrics": {
+    "total_dat_files": 30,
+    "normalized": 29,
+    "quarantined": 1,
+    "quarantine_reasons": {
+      "_quarantine_me": "unparseable coordinate line: 'garbage not a number here'"
+    },
+    "min_te_thickness_mm": 0.7999999999999995,
+    "naca_published_dev": {
+      "naca2412": 0.0001831976761444382,
+      "naca4412": 0.00017417633985046906,
+      "naca23012": 1.0249564095886682e-05
+    },
+    "resample_roundtrip_dev": {
+      "naca2412": 8.38139532599591e-05,
+      "naca4412": 0.00016652628731472774,
+      "naca23012": 2.7818886728425696e-05
+    }
+  },
+  "timestamp": "2026-07-05T09:53:33.671849+00:00"
+}

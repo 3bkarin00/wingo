@@ -1,0 +1,93 @@
+# Transcribed from plan.md §6, with one deliberate deviation: a single
+# segment ("whole") instead of the illustrative center/outer split, so this
+# fixture doesn't trip the D4 device-segment-containment rule — R1 accepts
+# a single segment (Assumption A1); segmentation lands in R1.5. See
+# changelog.md 2026-07-05.
+planform:
+  span_mm: 2400
+  segments:
+    - {name: whole, y_end_frac: 1.00, dihedral_deg: 0.0, sweep_le_deg: 0.0}
+  stations:
+    - {y_frac: 0.0, chord_mm: 320, twist_deg: 0.0, airfoil: naca23012}
+    - {y_frac: 1.0, chord_mm: 180, twist_deg: -2.0, airfoil: "uiuc:sd7037"}
+  twist_axis_xc: 0.25
+  mirror: true
+
+airfoils:
+  sources: [naca4, naca5, uiuc, dat_upload]
+  resample_points: 199
+  te_min_thickness_mm: 0.8
+
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 2}
+  core: {material: rohacell_31, thickness_mm: 3.0}
+  ramp_ratio: 3.0
+
+spars:
+  - name: main
+    xc_root: 0.25
+    xc_tip: 0.25
+    web: {material: cfrp_200gsm_twill, plies: 4}
+    tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}
+  - name: rear
+    xc_root: 0.70
+    xc_tip: 0.70
+    web: {material: cfrp_200gsm_twill, plies: 3}
+    tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}
+
+ribs:
+  count: 9
+  construction: {material: cfrp_200gsm_twill, plies: 3}
+  lightening_holes: {enabled: true, margin_mm: 8}
+
+te_surface:
+  enabled: true
+  span_start_frac: 0.55
+  span_end_frac: 0.95
+  hinge_xc_start: 0.75
+  hinge_xc_end: 0.75
+  gap_mm: 1.5
+  max_deflection_deg: 25
+  hinges: {mode: generated, count: 3, cots_pin_dia_mm: 3.0}
+
+le_droop:
+  enabled: true
+  span_start_frac: 0.10
+  span_end_frac: 0.55
+  hinge_xc_start: 0.15
+  hinge_xc_end: 0.15
+  gap_mm: 1.5
+  max_deflection_deg: 20
+  hinges: {mode: generated, count: 2}
+
+hardpoints:
+  auto: [hinge_lands, joint_housing_zones, fuselage_bosses]
+  fuselage_attachment:
+    bolts:
+      - {y_mm: 0, x_c: 0.25, dia_mm: 6}
+      - {y_mm: 0, x_c: 0.70, dia_mm: 6}
+
+joint_retention:
+  insertion_axis: horizontal_y
+  bolts_per_housing: 1
+  bolt: {dia_mm: 5, axis: global_z, head: countersunk_flush}
+  housing:
+    material: al_7075
+    side_wall_mm: 4.0
+    boss_thread: M5_placeholder
+    lip: {mode: flat_capped, flush_tol_mm: 0.1}
+
+molds:
+  bodies: all
+  flange_width_mm: 40
+  alignment_pins: {dia_mm: 8, count_min: 4, fit: sliding}
+  stock: {slab_lwh_mm: [1500, 500, 100], auto_section: true}
+  parting: auto_max_width
+
+ansys_export:
+  routes: [step_midsurface, cdb]
+  target_element_size_mm: 8
+  named_selections: true
+
+output:
+  formats: [step, stl, gltf, cdb, dxf, pdf, layup_csv, layup_json]

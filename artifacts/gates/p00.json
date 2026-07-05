@@ -1,0 +1,21 @@
+{
+  "phase": "p00",
+  "pass": true,
+  "metrics": {
+    "invalid_configs_rejected": [
+      "device_not_segment_contained",
+      "device_window_overlap",
+      "gap_below_tolerance",
+      "le_hinge_too_far_aft",
+      "sandwich_stack_exceeds_thickness",
+      "te_hinge_too_far_forward"
+    ],
+    "valid_configs_round_tripped": [
+      "full_example",
+      "minimal"
+    ],
+    "sigkill_job_id": "23ac0dc9-4613-4da9-9d8c-967c43161507",
+    "sigkill_final_status": "failed"
+  },
+  "timestamp": "2026-07-05T09:32:16.901487+00:00"
+}

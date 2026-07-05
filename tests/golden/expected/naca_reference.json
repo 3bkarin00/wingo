@@ -1,0 +1,12 @@
+{
+  "description": "P1 reference sections for the 'NACA generator matches published ordinates' gate criterion. Ground truth = the vendored UIUC-published coordinate files; the generator is compared to them by geometric point-to-curve distance (see backend/airfoils/metrics.py — y-at-x is invalid near the LE).",
+  "provenance": "UIUC Airfoil Coordinate Database, https://m-selig.ae.illinois.edu/ads/coord/<name>.dat, vendored under data/uiuc_snapshot/.",
+  "reference_sections": [
+    {"code": "naca2412", "series": "4-digit cambered", "dat": "naca2412.dat", "measured_max_dev_frac": 1.83e-4},
+    {"code": "naca4412", "series": "4-digit high-camber", "dat": "naca4412.dat", "measured_max_dev_frac": 1.74e-4},
+    {"code": "naca23012", "series": "5-digit (230 mean line)", "dat": "naca23012.dat", "measured_max_dev_frac": 1.02e-5}
+  ],
+  "threshold_frac": 5.0e-4,
+  "threshold_rationale": "max measured deviation across the 3 sections is 1.83e-4; threshold 5.0e-4 leaves ~2.7x margin while still catching a real regression. Lives in backend/tolerances.py::NACA_PUBLISHED_MATCH_MAX_DEV_FRAC.",
+  "generator_notes": "NACA thickness uses the open-TE coefficient (-0.1015 x^4), matching UIUC's published NACA coordinates. 5-digit uses the standard non-reflex (m, k1) mean-line constants scaled linearly by design Cl."
+}

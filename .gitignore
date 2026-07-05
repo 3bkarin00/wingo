@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+artifacts/*
+!artifacts/gates
+!artifacts/gates/**
+!artifacts/state.json
+.env
+*.log
+node_modules/
+.claude/

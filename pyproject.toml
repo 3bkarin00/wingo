@@ -1,0 +1,31 @@
+[project]
+name = "wingstructgen"
+version = "0.4.0"
+description = "Parametric composite wing structure generator"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24.0",
+    "pydantic>=2.7,<3",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.1,<4",
+    "redis>=5.0,<6",
+    "pyyaml>=6.0,<7",
+    "fastapi>=0.111,<1",
+    "uvicorn>=0.30,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9",
+    "cadquery>=2.8,<3",
+    "gmsh>=4.15,<5",
+    "ezdxf>=1.3,<2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
