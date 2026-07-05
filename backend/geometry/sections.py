@@ -67,7 +67,7 @@ def _segment_bounds(config: Config) -> list[tuple[float, float, float, float]]:
     return out
 
 
-def _le_and_z_offset(config: Config, y_frac: float, half_span_mm: float) -> tuple[float, float]:
+def le_and_z_offset(config: Config, y_frac: float, half_span_mm: float) -> tuple[float, float]:
     """Accumulate LE sweep (X) and dihedral (Z) offsets up to y_frac, honoring
     per-segment angles (C0 kinks at segment boundaries)."""
     le_x = 0.0
@@ -81,7 +81,7 @@ def _le_and_z_offset(config: Config, y_frac: float, half_span_mm: float) -> tupl
     return le_x, z
 
 
-def _interp_station(config: Config, y_frac: float, resample_points: int, te_frac_at: float):
+def interp_station(config: Config, y_frac: float, resample_points: int, te_frac_at: float):
     """Interpolate chord, twist, and airfoil shape at y_frac between the two
     bracketing stations (all canonical arrays share a point count, so a linear
     blend is a valid airfoil morph)."""
@@ -128,8 +128,8 @@ def build_planform_sections(
 
     sections: list[PlacedSection] = []
     for f in fracs:
-        chord, twist, pts = _interp_station(config, f, resample_points, te_min_mm)
-        le_x, z_base = _le_and_z_offset(config, f, half_span_mm)
+        chord, twist, pts = interp_station(config, f, resample_points, te_min_mm)
+        le_x, z_base = le_and_z_offset(config, f, half_span_mm)
         placed = place_section(
             pts, chord, twist, config.planform.twist_axis_xc,
             y_mm=f * half_span_mm, le_x_mm=le_x, z_base_mm=z_base,

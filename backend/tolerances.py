@@ -57,6 +57,17 @@ GAP_MIN_TESSELLATION_MULTIPLE = 2
 # a degenerate (zero-volume) gap body.
 GAP_MIN_KERNEL_MULTIPLE = 10
 
+# Provisional per-ply thickness lookup (mm), standing in for the D17
+# materials DB (Postgres `materials` table) until it's seeded in P1+. Values
+# are typical for the named fabric weight; update from the real DB once
+# `make seed` populates it. Shared by the P0 sandwich-stack validator
+# (backend/schema/validators.py) and the P3 hinge-axis-margin gate.
+PLY_THICKNESS_MM_PROVISIONAL = {
+    "cfrp_200gsm_twill": 0.20,
+    "cfrp_200gsm_uni": 0.18,
+    "gfrp_200gsm_twill": 0.22,
+}
+
 # --- P1 airfoil subsystem (thresholds + gate tolerances) --------------------
 
 # A UIUC .dat with fewer than this many coordinate points is implausible as a

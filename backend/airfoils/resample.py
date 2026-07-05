@@ -23,7 +23,7 @@ def split_surfaces(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return upper, lower
 
 
-def _interp_surface(target_x: np.ndarray, surface_le_to_te: np.ndarray) -> np.ndarray:
+def interp_surface(target_x: np.ndarray, surface_le_to_te: np.ndarray) -> np.ndarray:
     """Interpolate a surface's y at target_x. Guards np.interp's requirement
     of strictly-increasing sample x by sorting and de-duplicating (some real
     UIUC foils have a tiny x reversal near TE/LE)."""
@@ -56,8 +56,8 @@ def cosine_resample(points: np.ndarray, n_total: int) -> np.ndarray:
 
     upper, lower = split_surfaces(points)
     xs = cosine_x(n_per_surface)  # LE→TE
-    upper_y = _interp_surface(xs, upper)
-    lower_y = _interp_surface(xs, lower)
+    upper_y = interp_surface(xs, upper)
+    lower_y = interp_surface(xs, lower)
 
     # Reassemble canonical: upper TE→LE, then lower LE→TE (drop shared LE).
     upper_te_to_le = np.column_stack([xs[::-1], upper_y[::-1]])

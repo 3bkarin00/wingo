@@ -17,16 +17,6 @@ from backend.schema.errors import ConfigErrorCode, ConfigValidationError
 if TYPE_CHECKING:
     from backend.schema.models import Config, DeviceWindow
 
-# Provisional per-ply thickness lookup (mm), standing in for the D17
-# materials DB (Postgres `materials` table) until it's seeded in P1+.
-# Values are typical for the named fabric weight; update from the real DB
-# once `make seed` populates it.
-_PLY_THICKNESS_MM_PROVISIONAL = {
-    "cfrp_200gsm_twill": 0.20,
-    "cfrp_200gsm_uni": 0.18,
-    "gfrp_200gsm_twill": 0.22,
-}
-
 
 def _segment_bounds(config: "Config") -> list[tuple[float, float]]:
     bounds = []
@@ -143,7 +133,7 @@ def validate_sandwich_stack(config: "Config") -> None:
     need the real P1 ingest pipeline to know their thickness) and skips
     entirely if the face-sheet material isn't in the provisional ply-
     thickness table — both are documented limitations, not silent passes."""
-    ply_thickness = _PLY_THICKNESS_MM_PROVISIONAL.get(config.skin.face_sheet.material)
+    ply_thickness = tolerances.PLY_THICKNESS_MM_PROVISIONAL.get(config.skin.face_sheet.material)
     if ply_thickness is None:
         return
 

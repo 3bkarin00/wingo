@@ -1,0 +1,28 @@
+# Edge: devices + high twist — the F5 scenario that can push a hinge axis
+# outside the OML at mid-span when twist is large.
+planform:
+  span_mm: 2000
+  segments: [{name: whole, y_end_frac: 1.0, dihedral_deg: 0.0, sweep_le_deg: 0.0}]
+  stations:
+    - {y_frac: 0.0, chord_mm: 300, twist_deg:  0.0, airfoil: naca2412}
+    - {y_frac: 1.0, chord_mm: 200, twist_deg: -12.0, airfoil: naca2412}
+  twist_axis_xc: 0.25
+  mirror: true
+airfoils: {sources: [naca4], resample_points: 199, te_min_thickness_mm: 0.8}
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 2}
+  core: {material: rohacell_31, thickness_mm: 2.0}
+  ramp_ratio: 3.0
+spars:
+  - {name: main, xc_root: 0.25, xc_tip: 0.25, web: {material: cfrp_200gsm_twill, plies: 3},
+     tongue: {cross_section: rect_hollow, engagement_mm: 100, clearance_mm: 0.2, wall_mm: 2.0}}
+  - {name: rear, xc_root: 0.70, xc_tip: 0.70, web: {material: cfrp_200gsm_twill, plies: 3},
+     tongue: {cross_section: rect_hollow, engagement_mm: 100, clearance_mm: 0.2, wall_mm: 2.0}}
+ribs: {count: 7, construction: {material: cfrp_200gsm_twill, plies: 2}, lightening_holes: {enabled: true, margin_mm: 8}}
+te_surface: {enabled: true, span_start_frac: 0.50, span_end_frac: 0.90,
+             hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
+             max_deflection_deg: 25, hinges: {mode: generated, count: 2}}
+le_droop:   {enabled: true, span_start_frac: 0.10, span_end_frac: 0.45,
+             hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
+             max_deflection_deg: 15, hinges: {mode: generated, count: 2}}
+output: {formats: [step, stl, gltf]}

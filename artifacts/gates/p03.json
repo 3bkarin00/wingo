@@ -1,0 +1,43 @@
+{
+  "phase": "p03",
+  "pass": true,
+  "metrics": {
+    "hinge_axis_margin_mm": {
+      "golden_01_straight_taper": {},
+      "golden_02_twist_transition": {},
+      "golden_03_dihedral_sweep": {},
+      "devices_full": {
+        "te": 5.85,
+        "le": 13.033
+      },
+      "devices_twisted": {
+        "te": 5.432,
+        "le": 13.009
+      },
+      "high_taper": {},
+      "high_twist": {},
+      "thin_airfoil": {}
+    },
+    "containment": {
+      "golden_01_straight_taper": true,
+      "golden_02_twist_transition": true,
+      "golden_03_dihedral_sweep": true,
+      "devices_full": true,
+      "devices_twisted": true,
+      "high_taper": true,
+      "high_twist": true,
+      "thin_airfoil": true
+    },
+    "forced_ribs": {
+      "golden_01_straight_taper": true,
+      "golden_02_twist_transition": true,
+      "golden_03_dihedral_sweep": true,
+      "devices_full": true,
+      "devices_twisted": true,
+      "high_taper": true,
+      "high_twist": true,
+      "thin_airfoil": true
+    }
+  },
+  "timestamp": "2026-07-05T13:45:27.616827+00:00"
+}

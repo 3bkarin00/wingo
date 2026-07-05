@@ -86,3 +86,36 @@ meaningful change: what changed, why, and what it retired/added.
   matching gate file (rather than letting an empty/literal glob masquerade as
   a pass). Regress stays strict; the gate itself was always proper pytest —
   only the regress runner's glob handling was wrong. See docs/known_issues.md.
+
+## 2026-07-05 — P3 (Reference geometry) DONE
+
+- `make gate PHASE=p03` green (16 tests) + regress green (p00–p03). Built
+  `backend/geometry/reference.py`: spar ruled surfaces, rib planes (auto +
+  forced at segment boundaries and device edges), TE/LE hinge axes (straight
+  lines), fuselage hardpoints. 2 new edge configs (`devices_full`,
+  `devices_twisted` — the deliberate F5 high-twist stress case).
+- **Correctness bug found and fixed before marking the gate green**: the P3
+  work existed uncommitted on this branch already, but its containment test
+  only checked point-in-solid (`BRepClass3d_SolidClassifier` IN/ON) — which
+  says nothing about *how far* inside a point is. A hinge axis sitting
+  exactly at the skin (zero clearance) would have passed. Backfilled the
+  missing R0 probe (docs/r0_findings/p03.md) for the new OCP APIs this phase
+  touches, which surfaced the real fix: `BRepExtrema_DistShapeShape` between
+  a vertex and a **solid** is always 0 for interior points (vertex-in-volume
+  trivially "touches"); the true point-to-surface margin needs distance to
+  the solid's **shell** (`oml.Shells()[0]`). Rewrote the gate to assert
+  `distance-to-shell >= sandwich stack` (§9 P3 pass criteria, F5), not just
+  containment. Real margins recorded: devices_twisted TE hinge margin drops
+  from 5.85mm (untwisted) to 5.43mm (-12° twist) as physically expected, both
+  comfortably clear of the 2.8mm required stack — not a threshold-skimming
+  pass.
+- Also fixed while reviewing: a bare `1e-5` tolerance literal in the gate
+  test (moved to reusing `tolerances.KERNEL_TOLERANCE_MM` — no new literal
+  needed); promoted `_PLY_THICKNESS_MM_PROVISIONAL` from a validators.py
+  private dict to `tolerances.PLY_THICKNESS_MM_PROVISIONAL` so the P0
+  validator and P3 gate can't drift apart on the same material assumption;
+  made `sections.py`'s `interp_station`/`le_and_z_offset` and
+  `resample.py`'s `interp_surface` public (reference.py needed them —
+  reaching into another module's underscore-private names was the wrong
+  fix); removed a stray uncommitted `scripts/test_reference.py` dev script
+  (duplicated reference.py logic, not a real R0 probe).
