@@ -12,3 +12,5 @@ artifacts/*
 node_modules/
 .claude/
 dump.rdb
+tools/viewer/.cache/
+tools/viewer/dist/
