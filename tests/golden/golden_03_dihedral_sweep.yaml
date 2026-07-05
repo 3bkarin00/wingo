@@ -1,0 +1,23 @@
+# Golden 03 — two segments with per-segment dihedral + sweep and a kink station.
+# Exercises accumulated LE-sweep / dihedral offsets and the boundary section.
+planform:
+  span_mm: 2600
+  segments:
+    - {name: center, y_end_frac: 0.30, dihedral_deg: 0.0, sweep_le_deg: 0.0}
+    - {name: outer,  y_end_frac: 1.00, dihedral_deg: 5.0, sweep_le_deg: 8.0}
+  stations:
+    - {y_frac: 0.0, chord_mm: 340, twist_deg: 0.0, airfoil: naca2412}
+    - {y_frac: 0.3, chord_mm: 300, twist_deg: 0.0, airfoil: naca2412}
+    - {y_frac: 1.0, chord_mm: 160, twist_deg: -2.0, airfoil: naca2412}
+  twist_axis_xc: 0.25
+  mirror: true
+airfoils: {sources: [naca4], resample_points: 199, te_min_thickness_mm: 0.8}
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 1}
+  core: {material: rohacell_31, thickness_mm: 2.0}
+  ramp_ratio: 3.0
+spars:
+  - {name: main, xc_root: 0.25, xc_tip: 0.25, web: {material: cfrp_200gsm_twill, plies: 3},
+     tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}}
+ribs: {count: 9, construction: {material: cfrp_200gsm_twill, plies: 3}, lightening_holes: {enabled: true, margin_mm: 8}}
+output: {formats: [step, stl, gltf]}

@@ -54,6 +54,31 @@ meaningful change: what changed, why, and what it retired/added.
 - Deferred to later phases (not P1): DB persistence of ingested airfoils to
   the `airfoils` table (schema exists since P0); `.dat` upload endpoint (API,
   post-P10). P1 is the in-memory pipeline the gate verifies.
+
+## 2026-07-05 — P2 (Sections + OML loft) DONE
+
+- `make gate PHASE=p02` green (7 tests) + regress green (p00–p02). Built
+  `backend/geometry/`: `sections.py` (scale + twist about declared axis +
+  per-segment dihedral/sweep accumulation), `loft.py` (watertight OML loft +
+  mirror), `airfoil_resolver.py` (name→canonical, reuses P1). Added 3 golden
+  reference wings + committed expected volumes (provenance), and 3 edge configs
+  (high taper / high twist / thin foil).
+- R0/diagnostic finding that changed the construction (docs/r0_findings/p02.md):
+  a SPLINE loft (`makeLoft ruled=False`) bulges ~3.1% outward between sections —
+  exactly the ±3% volume-gate limit — and its volume is unstable with section
+  count. Switched to POLYGON wires + `ruled=True`: loft volume matches the
+  analytic prismatoid to <0.3%, is stable, and gives planar facets robust for
+  P4+ booleans. (`ruled=True` with spline wires is wrong — uses only edge
+  endpoints.)
+- Trap the R0 probe caught: a misaligned/twisted loft can report
+  `IsValid()==True` yet be geometrically wrong (volume 5x off). So the gate
+  pairs watertightness with the volume-conservation band, and sections keep a
+  consistent point order/start (canonical TE-start) by construction.
+- Twist placement matches an independent hand-computed rotation about the
+  declared axis to 0.0 mm (exact). Volume dev vs analytic estimate: golden
+  0.20–0.38%, all watertight; all edge configs valid (no self-intersection).
+- Git: work done on branch `phase/p02` (per-phase branch/PR flow, PR-based).
+  P0+P1 committed as baseline on main (commit 1a001d4); remote switched to SSH.
 - Fixed `scripts/run_regress.py`: it passed the literal glob
   `tests/gates/test_p00_*.py` to pytest via subprocess (no shell expansion),
   so pytest exited 2 on an unmatched path. Now expands gate files with

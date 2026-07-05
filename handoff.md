@@ -1,18 +1,19 @@
 # Handoff — 2026-07-05
 ## State
-- Release/Phase: R1 / P1 DONE
-- Last green gate: p01 (artifacts/gates/p01.json, pass=true; regress green: p00, p01)
+- Release/Phase: R1 / P2 DONE (on branch phase/p02)
+- Last green gate: p02 (artifacts/gates/p02.json; regress green: p00, p01, p02)
 ## Next single action
-- Start P2 (Sections + OML loft, plan.md §8.2–8.3 / §9 P2). R0 FIRST: probe
-  the real OCP loft API on 3 sections (true signature + wire-ordering
-  requirement) → docs/r0_findings/p02.md, before writing loft code. Then:
-  section scaling + twist about declared twist_axis_xc + per-segment
-  dihedral/sweep; master OML loft (watertight), mirror for full span.
+- Merge phase/p02 → main (PR), branch phase/p03, start P3 (Reference geometry,
+  plan.md §8.4 / §9 P3): spar ruled surfaces; rib planes (auto + forced at
+  device edges & break stations); both hinge axes (straight, containment-
+  sampled ≥50 stations with margin ≥ sandwich stack — F5); hardpoint
+  footprints. Gate: axis straightness by construction; sampled containment on
+  golden AND edge configs; forced rib planes at every device edge.
 ## Blockers / open questions
-- None. P2 needs golden configs + expected metrics (tests/golden/) — currently
-  empty; create the 3 reference wings' expected volume/watertightness JSON with
-  provenance as part of P2 (plan.md §11).
+- Push blocked until the generated SSH key is added to a GitHub account with
+  push access to 3bkarin00/wingo (pubkey shared with the user). PR flow chosen
+  (branch → PR → merge); needs gh CLI or the GitHub UI for the PR step.
 ## Do not touch
-- P0/P1 gates are frozen contracts. Changing one needs a docs/gate_changes.md
-  entry. Env caveat unchanged: workspace rebuild needs the apt libs in
-  docs/known_issues.md.
+- P0/P1/P2 gates are frozen contracts (docs/gate_changes.md for any change).
+- OML construction is POLYGON wires + ruled=True by deliberate decision
+  (docs/r0_findings/p02.md) — do not switch to spline lofts.

@@ -1,0 +1,9 @@
+{
+  "config": "golden_03_dihedral_sweep.yaml",
+  "expected_volume_mm3": 14788688.8,
+  "analytic_estimate_mm3": 14844919.4,
+  "watertight": true,
+  "provenance": "Loft volume from the P2 ruled-polygon OML (backend/geometry/loft.py), cross-checked against the analytic prismatoid estimate to <0.3% (see docs/r0_findings/p02.md). Regenerate only on a deliberate geometry change.",
+  "regression_tolerance_frac": 0.01,
+  "loft_vs_estimate_limit_frac": 0.03
+}

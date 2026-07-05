@@ -1,0 +1,9 @@
+{
+  "config": "golden_02_twist_transition.yaml",
+  "expected_volume_mm3": 11708210.0,
+  "analytic_estimate_mm3": 11731585.6,
+  "watertight": true,
+  "provenance": "Loft volume from the P2 ruled-polygon OML (backend/geometry/loft.py), cross-checked against the analytic prismatoid estimate to <0.3% (see docs/r0_findings/p02.md). Regenerate only on a deliberate geometry change.",
+  "regression_tolerance_frac": 0.01,
+  "loft_vs_estimate_limit_frac": 0.03
+}

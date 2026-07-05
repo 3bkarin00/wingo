@@ -1,0 +1,39 @@
+{
+  "phase": "p02",
+  "pass": true,
+  "metrics": {
+    "golden": {
+      "golden_01_straight_taper": {
+        "volume_mm3": 9718916.6,
+        "estimate_dev_pct": 0.197,
+        "regression_dev_pct": 0.0,
+        "watertight": true
+      },
+      "golden_02_twist_transition": {
+        "volume_mm3": 11708210.0,
+        "estimate_dev_pct": 0.199,
+        "regression_dev_pct": 0.0,
+        "watertight": true
+      },
+      "golden_03_dihedral_sweep": {
+        "volume_mm3": 14788688.8,
+        "estimate_dev_pct": 0.379,
+        "regression_dev_pct": 0.0,
+        "watertight": true
+      }
+    },
+    "edge": {
+      "high_taper": {
+        "watertight": true
+      },
+      "high_twist": {
+        "watertight": true
+      },
+      "thin_airfoil": {
+        "watertight": true
+      }
+    },
+    "twist_max_dev_mm": 0.0
+  },
+  "timestamp": "2026-07-05T12:08:19.827772+00:00"
+}
