@@ -1,0 +1,43 @@
+{
+  "phase": "p04",
+  "pass": true,
+  "metrics": {
+    "bodies": {
+      "te_half": {
+        "wing_vol_mm3": 6566809.9,
+        "cs_vol_mm3": 229601.2
+      },
+      "te_half_twisted": {
+        "wing_vol_mm3": 5303419.5,
+        "cs_vol_mm3": 245419.8
+      }
+    },
+    "conservation_pct": {
+      "te_half": 0.0,
+      "te_half_twisted": 0.0
+    },
+    "shards": {
+      "te_half": 0,
+      "te_half_twisted": 0
+    },
+    "cove_nose_radii_mm": {
+      "te_half": {
+        "cove": [
+          5.472
+        ],
+        "nose": [
+          3.972
+        ]
+      },
+      "te_half_twisted": {
+        "cove": [
+          5.747
+        ],
+        "nose": [
+          4.247
+        ]
+      }
+    }
+  },
+  "timestamp": "2026-07-05T14:21:14.565012+00:00"
+}

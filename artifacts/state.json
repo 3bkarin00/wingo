@@ -1,12 +1,13 @@
 {
   "schema_version": "0.4",
   "current_release": "R1",
-  "current_phase": "p03",
+  "current_phase": "p04",
   "gates_passed": [
     "p00",
     "p01",
     "p02",
-    "p03"
+    "p03",
+    "p04"
   ],
   "last_golden_run": null,
   "plan_md_version": "0.4"

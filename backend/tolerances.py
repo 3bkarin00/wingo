@@ -85,3 +85,30 @@ RESAMPLE_ROUNDTRIP_MAX_DEV_FRAC = 1.0e-3
 # is 1.8e-4 (see tests/golden/expected/naca_reference.json); threshold set at
 # 5e-4 → ~2.7x margin, tight enough to catch a real generator regression.
 NACA_PUBLISHED_MATCH_MAX_DEV_FRAC = 5.0e-4
+
+# --- Boolean / device-cut phases (P4+) --------------------------------------
+
+# Any solid emerging from a boolean cut with volume below this many mm^3 is a
+# micro-shard, not a real body — filter it out (F3). A real wing part (skin
+# panel, control surface) is at least ~10^4 mm^3; a boolean shard is typically
+# < 1 mm^3. 1.0 mm^3 sits far below any legitimate body and far above kernel
+# noise. Re-evaluate if a future phase produces intentionally tiny features.
+SHARD_MIN_VOLUME_MM3 = 1.0
+
+# Fuzzy value handed to BRepAlgoAPI boolean ops at the cove, where nose/cove
+# cylinders run nearly parallel (F4 risk zone). OCC's default confusion is
+# 1e-4 mm; 1e-3 mm gives the kernel a slightly larger merge tolerance to
+# resolve near-coincident edges robustly without visibly moving geometry.
+BOOLEAN_FUZZY_VALUE_MM = 1.0e-3
+
+# P4 gate: volume-conservation band for the TE cut — vol(wing)+vol(CS)+vol(gap)
+# must equal vol(P2 OML) to within this fraction (plan.md §9 P4: 0.5%). Our
+# construction conserves volume exactly in principle; the band absorbs kernel
+# fuzz from the boolean split.
+DEVICE_CUT_VOLUME_CONSERVATION_FRAC = 0.005
+
+# P4 tangency check (F4): two coaxial cylindrical faces whose radii differ by
+# less than this are effectively tangent/coincident — an unstable-boolean
+# hazard. The cove/nose clearance (gap_mm, ≥1 mm typical) must exceed it by a
+# wide margin. 0.1 mm sits far above kernel noise and far below any real gap.
+FACE_TANGENCY_TOLERANCE_MM = 0.1

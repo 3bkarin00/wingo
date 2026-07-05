@@ -87,6 +87,28 @@ meaningful change: what changed, why, and what it retired/added.
   a pass). Regress stays strict; the gate itself was always proper pytest —
   only the regress runner's glob handling was wrong. See docs/known_issues.md.
 
+## 2026-07-05 — P4 (TE surface cut) DONE
+
+- `make gate PHASE=p04` green (8 tests) + regress green (p00–p04). Built
+  `backend/geometry/te_cut.py` + shared `booleans.py` (fuzzy cut/common, shard
+  filter, coaxial-cylinder-radius extractor). New half-wing device configs
+  (`tests/configs/devices/te_half*.yaml`, mirror:false → exactly 2 bodies).
+- R0 probe (docs/r0_findings/p04.md) confirmed `.cut()`→Compound, `.Solids()`
+  extraction, `SetFuzzyValue`, tilted-axis cylinders, shard behaviour. The
+  construction it enabled: two nested cylinders about the tilted hinge axis
+  (nose R, cove R+gap) + an aft half-space box. CS = OML ∩ (nose ∪ aft_box,
+  inset span, aft plane pushed back by gap_mm); wing = OML − cove − aft_box
+  (full span). CS ⊆ removed-from-wing region ⇒ disjoint ⇒ **volume conserved
+  by set algebra (0.0000% error), not luck.**
+- F4 (tangent-face) check: solid↔solid distance was too slow (>2min timeout),
+  so the gate instead reads the ACTUAL built cove/nose cylinder radii off the
+  geometry and asserts they're distinct (concentric-but-unequal ⇒ never
+  tangent). Doubles as verifying the nose was rebuilt as a revolution. Real
+  radii: cove 5.47 / nose 3.97 mm (te_half), gap = exactly 1.5 mm.
+- Results: both configs 2 watertight bodies, 0 shards, 0.0% conservation
+  error, non-tangent cove clearance. Scoping: device mirroring onto both wings
+  deferred (P4/P5 use half-wing configs to match the plan's exact body counts).
+
 ## 2026-07-05 — P3 (Reference geometry) DONE
 
 - `make gate PHASE=p03` green (16 tests) + regress green (p00–p03). Built

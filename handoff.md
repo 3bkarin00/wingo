@@ -1,22 +1,20 @@
 # Handoff — 2026-07-05
 ## State
-- Release/Phase: R1 / P3 DONE (on branch phase/p03)
-- Last green gate: p03 (artifacts/gates/p03.json; regress green: p00–p03)
+- Release/Phase: R1 / P4 DONE (on branch phase/p04, not yet pushed/PR'd)
+- Last green gate: p04 (artifacts/gates/p04.json; regress green: p00–p04)
 ## Next single action
-- Merge phase/p03 → main (PR), branch phase/p04, start P4 (TE surface cut,
-  plan.md §8.5 / §9 P4). R0 FIRST: probe boolean cut + revolution surface on
-  a toy solid (fuzzy-value behavior) before implementing. Then: spanwise gap
-  cuts + chordwise cut, nose rebuilt as revolution about the TE hinge axis,
-  concave cove + false spar, deliberate clearance angle (NEVER exact
-  tangency, F4). Gate: exactly 2 watertight bodies; vol(wing)+vol(CS)+vol(gap)
-  = vol(P2) within 0.5%; shard filter (F3); no tangent face pairs.
+- Commit P04, push phase/p04, open PR (user merges in GitHub UI). Then branch
+  phase/p05, start P5 (LE droop cut, plan.md §8.5 LE path / §9 P5): mirrored
+  approach to the TE cut but the droop KEEPS the original airfoil LE (why droop
+  beat slats). Gate: 3 watertight bodies (wing + TE CS + LE droop); same
+  conservation / shard / tangency criteria as P4. Reuse te_cut's cylinder+box
+  construction and booleans.py helpers; add a le_droop config (half-wing).
 ## Blockers / open questions
-- Push blocked on nothing now (SSH key live). Waiting on user to merge the
-  phase/p03 PR in the GitHub UI (chosen PR flow), then pull main before
-  branching phase/p04.
+- None. SSH push works; PRs merged by user in UI.
 ## Do not touch
-- P0/P1/P2/P3 gates are frozen contracts (docs/gate_changes.md for changes).
-- OML construction is POLYGON wires + ruled=True (docs/r0_findings/p02.md).
-- Hinge-axis margin check MUST use distance-to-shell, never distance-to-solid
-  (always 0 for interior points) or point-in-solid alone (no margin info) —
-  docs/r0_findings/p03.md.
+- P0–P4 gates are frozen contracts (docs/gate_changes.md for changes).
+- OML = polygon wires + ruled=True (r0_findings/p02.md). Hinge-axis margin uses
+  distance-to-SHELL (r0_findings/p03.md). Device cuts: nested cylinders about
+  the hinge axis + aft box, volume conserved by set algebra; F4 checked via
+  distinct coaxial-cylinder radii, NOT solid↔solid distance (too slow)
+  (r0_findings/p04.md).
