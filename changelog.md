@@ -141,3 +141,84 @@ meaningful change: what changed, why, and what it retired/added.
   reaching into another module's underscore-private names was the wrong
   fix); removed a stray uncommitted `scripts/test_reference.py` dev script
   (duplicated reference.py logic, not a real R0 probe).
+
+## 2026-07-07 — P4 refined per-station construction: audit fixes + test-architecture overhaul
+
+- **Context**: a prior session (interrupted mid-work, then resumed by a
+  different model) had already replaced P4-v1's cylinder-based cove/nose
+  with the normative per-station axis-centered-arc construction (ADR-002)
+  and rewritten the gate for it, but the work was uncommitted and untrusted
+  — `artifacts/gates/p04.json` still held v1's stale metrics shape
+  (`cove_nose_radii_mm`), meaning the refined construction had never
+  actually produced a real recorded gate pass. Audited both `te_cut.py` and
+  `cove_profile.py` in full before running anything further.
+- **Bug found and fixed**: `build_nose_arc_points`'s two-arc + Hermite-blend
+  branch (taken when `|Ru-Rl| > NOSE_RADII_MATCH_MM`) produced two
+  consecutive duplicate points at each arc/blend junction — the blend's
+  `tt=0`/`tt=1` samples landed exactly on the arc segments' own last/first
+  point, which the arc segment already contributes. Zero-length polygon
+  edges are a latent loft-degeneracy risk. Neither current device config
+  exercises this branch (`Ru-Rl` stays under the 1.0mm match threshold for
+  both), so it was invisible until now; fixed by sampling the blend on an
+  open interval `(0,1)` instead of the closed one, and added a fast
+  pure-numpy regression test (`test_two_arc_nose_branch_no_duplicate_points`,
+  synthetic `StationFeet` forcing the branch) so it stays caught even though
+  no config currently reaches it.
+- **Gate test weaknesses found and fixed**: `test_cove_clearance_at_rest_
+  and_deflected` sampled ALL CS vertices, including the flat spanwise
+  end-caps that sit `gap_mm` from the wing by design (a separate, orthogonal
+  clearance mechanism) — restricted sampling to vertices axially interior to
+  `[2*gap, axis_len-2*gap]` so the pre-existing spanwise clearance can't be
+  mistaken for the radial `COVE_CLEARANCE_MM` one. `test_nose_axis_centered`
+  only checked `Ru/Rl > kernel_tol` (non-degeneracy, not axis-centering) —
+  rewrote it to sample the ACTUAL built CS solid via a real OCC section at
+  several interior stations, split the section into nose-arc vs. aft-skin
+  regions by angle, and assert the nose region's points fall within
+  `[min(Ru,Rl), max(Ru,Rl)] ± COVE_CLEARANCE_TOL_MM` of the axis — a check
+  that can actually fail if the built solid disagrees with the construction,
+  unlike re-evaluating the same formula that built the points.
+- **Test architecture overhaul** (docs/known_issues.md): the gate's
+  `cut_results` fixture built BOTH device configs unconditionally regardless
+  of `-k` test selection, so every diagnostic hypothesis about
+  `te_half_twisted`'s runtime cost a ~260s+ full rebuild of both configs to
+  test. Replaced with: (1) **lazy, indirect-parametrized fixtures**
+  (`cut_result`/`cut_result_fresh`, keyed per config stem via
+  `pytest_generate_tests`) — a `-k te_half` run now never touches
+  `te_half_twisted`; (2) a **disk build cache**
+  (`tests/gates/geometry_cache.py`), keyed on `SHA256(config JSON +
+  geometry-module source)`, storing only the raw pre-shard-filter boolean
+  output as `.brep` (verified round-trip-exact for both single- and
+  multi-solid shapes — `scripts/r0_probes/probe_brep_cache.py`,
+  `docs/r0_findings/p04.md`) — `filter_shards`/sort/gap-volume/every gate
+  assertion always recomputes fresh from the loaded shapes, so caching can
+  only skip a boolean, never an assertion; (3) `te_cut.py` split into
+  `build_te_cut_shapes` (expensive, cacheable, now timed per stage) and
+  `finish_te_cut` (cheap, always fresh) to give the cache a clean seam; (4) a
+  **slow tier** (`@pytest.mark.slow`, registered in pyproject.toml) that
+  forces one real uncached rebuild per config every gate/regress run,
+  proving the cache matches reality — `-m "not slow"` is for quick local
+  iteration only, never for `make gate`/`make regress`; (5)
+  `GEOMETRY_TEST_TIMEOUT_S = 600` (`tolerances.py`) via `pytest-timeout`,
+  applied module-wide, so "hang vs. slow" is answered by a timeout firing (or
+  not), never by watching a terminal; (6) `--durations=20` on every gate/
+  regress invocation (Makefile, `scripts/run_regress.py`); (7) per-stage
+  construction timings (`station_data`, `loft_regions`, `aft_boxes`,
+  `wing_cut`, `cs_fuse`, `cs_common`) written to
+  `artifacts/gates/p04_timings.json` on every real build.
+- **Result of the (now instrumented, cached) investigation**:
+  `te_half_twisted`'s earlier ">150s, no completion" was not a hang — cold
+  construction takes ~145s (vs ~50s untwisted), 2-4x more expensive
+  specifically in `BRepAlgoAPI_Cut`/`Common` (lofting and station analysis
+  are identical between configs) — a real, twist-driven OCC boolean cost,
+  not a construction defect. No construction-strategy change applied: no
+  single construction boolean exceeds the ~120s investigate threshold, the
+  whole gate completes in ~7min with 4x+ headroom under the 600s per-test
+  budget, and the actual pain (every gate re-run rebuilding regardless of
+  what changed) is what the cache fixes — see docs/known_issues.md
+  ("Twisted/tilted device configs cost 2-4x more per boolean than
+  untwisted") for the full number breakdown and why tuning fidelity down was
+  rejected.
+- `make gate PHASE=p04` green (17 tests, both configs) + `make regress`
+  green (p00-p04). New rule (CLAUDE.md): never re-run a full geometry build
+  to answer a question that instrumentation, the build cache, or a single
+  parametrized test can answer instead.

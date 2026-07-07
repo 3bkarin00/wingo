@@ -57,12 +57,35 @@ def main() -> int:
     # Local chord at each section, for sizing rib rectangles.
     chord_by_y = {round(s.y_mm, 3): s.chord_mm for s in sections}
 
+    # P4: if the config has a TE control surface (and is a half-wing, so the
+    # cut yields 2 bodies), run the real cut and export wing + control surface
+    # as separate bodies so the gap/cove is visible.
+    te_cut = None
+    if config.te_surface and config.te_surface.enabled and not config.planform.mirror:
+        from backend.geometry.te_cut import cut_te_surface
+
+        res = cut_te_surface(config, oml)
+        te_cut = {
+            "wing": _tessellate(res.wing),
+            "control_surface": _tessellate(res.control_surface),
+            "gap_volume_mm3": round(res.gap_volume_mm3, 1),
+            "nose_radius_mm": round(res.nose_radius_mm, 2),
+            "cove_radius_mm": round(res.cove_radius_mm, 2),
+        }
+
+    capabilities = [
+        "P2: sections (scale/twist/dihedral/sweep) + watertight OML loft + mirror",
+        "P3: spar ruled surfaces, rib planes (auto+forced), hinge axes, hardpoints",
+    ]
+    if te_cut:
+        capabilities.append(
+            "P4: TE control-surface cut — 2 watertight bodies, cove/nose clearance, volume conserved"
+        )
+
     data = {
         "config_name": cfg_path.stem,
-        "capabilities": [
-            "P2: sections (scale/twist/dihedral/sweep) + watertight OML loft + mirror",
-            "P3: spar ruled surfaces, rib planes (auto+forced), hinge axes, hardpoints",
-        ],
+        "capabilities": capabilities,
+        "te_cut": te_cut,
         "half_span_mm": (
             config.planform.span_mm / 2.0 if config.planform.mirror else config.planform.span_mm
         ),

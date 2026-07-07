@@ -100,8 +100,17 @@
 
   var layers = {};
 
-  layers.oml = indexedMesh(DATA.oml, STRUCTURE, 0.32);
-  root.add(layers.oml);
+  if (DATA.te_cut) {
+    // P4: show the two cut bodies. Fixed wing translucent so the cove/gap is
+    // visible; control surface opaque amber as the highlighted moving part.
+    layers.wing = indexedMesh(DATA.te_cut.wing, STRUCTURE, 0.28);
+    root.add(layers.wing);
+    layers.cs = indexedMesh(DATA.te_cut.control_surface, KINEMATIC, 0.9);
+    root.add(layers.cs);
+  } else {
+    layers.oml = indexedMesh(DATA.oml, STRUCTURE, 0.32);
+    root.add(layers.oml);
+  }
 
   Object.keys(DATA.spars).forEach(function (name) {
     var g = indexedMesh(DATA.spars[name], STRUCTURE, 0.85);
@@ -196,7 +205,9 @@
 
   // ---- sidebar: build layer rows from what was actually exported ----------
 
-  var layerRows = [["oml", "Outer Mold Line", STRUCTURE]];
+  var layerRows = DATA.te_cut
+    ? [["wing", "Wing (fixed)", STRUCTURE], ["cs", "Control Surface", KINEMATIC]]
+    : [["oml", "Outer Mold Line", STRUCTURE]];
   Object.keys(DATA.spars).forEach(function (name) {
     layerRows.push(["spar_" + name, name.charAt(0).toUpperCase() + name.slice(1) + " Spar", STRUCTURE]);
   });
@@ -237,7 +248,9 @@
 
   // ---- stats readout ---------------------------------------------------------
 
-  var triCount = DATA.oml.triangles.length;
+  var triCount = DATA.te_cut
+    ? DATA.te_cut.wing.triangles.length + DATA.te_cut.control_surface.triangles.length
+    : DATA.oml.triangles.length;
   Object.keys(DATA.spars).forEach(function (n) { triCount += DATA.spars[n].triangles.length; });
 
   var statLines = [
@@ -246,8 +259,13 @@
     ["triangles", triCount.toLocaleString()],
     ["rib planes", String(DATA.rib_planes.length)],
     ["hinge axes", String(Object.keys(DATA.hinge_axes).length)],
-    ["hardpoints", String(DATA.hardpoints.length)],
   ];
+  if (DATA.te_cut) {
+    statLines.push(["bodies", "2 (wing + control surf)"]);
+    statLines.push(["cove / nose", DATA.te_cut.cove_radius_mm + " / " + DATA.te_cut.nose_radius_mm + " mm"]);
+  } else {
+    statLines.push(["hardpoints", String(DATA.hardpoints.length)]);
+  }
   var statsEl = document.getElementById("stats");
   statLines.forEach(function (pair) {
     var row = document.createElement("div");

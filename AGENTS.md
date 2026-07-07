@@ -43,6 +43,14 @@ OCC workaround in `docs/known_issues.md`.
 - Never use OCC shell/thicken for the IML (F1). Never exact tangency in
   booleans (F4). Never skip the shard filter after a boolean (F3).
 - Never invent an API — if unsure of a signature, run the R0 probe.
+- Never re-run a full geometry-build gate to answer a question that
+  instrumentation, the geometry build cache, or a single parametrized test
+  can answer instead. Gate tests build geometry through
+  `tests/gates/geometry_cache.py` (per-config, lazy — a `-k <stem>` run must
+  build only that config); per-stage construction timings land in
+  `artifacts/gates/pXX_timings.json` on every real build, and `--durations=20`
+  runs on every `make gate`/`make regress`. Diagnose a slow config by reading
+  those, not by watching a terminal.
 - All units mm/deg; all frames per `docs/conventions.md`. No implicit conventions.
 - Every numeric tolerance lives in `backend/tolerances.py` with a derivation
   comment — a tolerance literal anywhere else is a review-blocking offense.
@@ -72,3 +80,10 @@ OCC workaround in `docs/known_issues.md`.
 - `handoff.md` — next single action, hard cap ~20 lines, rewritten not appended.
 - `artifacts/state.json` — machine-readable phase/gate state (read this for
   STATE; read `handoff.md` for INTENT — never parse prose for state).
+- `tests/gates/geometry_cache.py` — disk cache for expensive OCC boolean
+  construction output (keyed on config + geometry-module source hash), used
+  by gate fixtures only; never by production/worker code, which always
+  builds fresh. `artifacts/cache/` (gitignored) holds the cached `.brep`s.
+- `artifacts/gates/pXX_timings.json` — per-stage construction timings from
+  the last real (non-cached) build of each config, for diagnosing a slow
+  gate without re-running it.

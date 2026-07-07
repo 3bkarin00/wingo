@@ -45,7 +45,7 @@ probes:
 
 gate:
 	@if [ -z "$(PHASE)" ]; then echo "usage: make gate PHASE=p00"; exit 1; fi
-	$(PYTEST) tests/gates/test_$(PHASE)_*.py -v
+	$(PYTEST) tests/gates/test_$(PHASE)_*.py -v --durations=20
 
 regress:
 	@$(PY) scripts/run_regress.py

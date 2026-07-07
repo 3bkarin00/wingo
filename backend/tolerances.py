@@ -109,6 +109,73 @@ DEVICE_CUT_VOLUME_CONSERVATION_FRAC = 0.005
 
 # P4 tangency check (F4): two coaxial cylindrical faces whose radii differ by
 # less than this are effectively tangent/coincident — an unstable-boolean
-# hazard. The cove/nose clearance (gap_mm, ≥1 mm typical) must exceed it by a
-# wide margin. 0.1 mm sits far above kernel noise and far below any real gap.
+# hazard. 0.1 mm sits far above kernel noise and far below any real gap.
 FACE_TANGENCY_TOLERANCE_MM = 0.1
+
+# --- TE/LE cove-nose per-station arc construction (§8.5, refined) ----------
+#
+# Per-station 2D construction in planes ⟂ the hinge axis: the CS nose is one
+# or two arcs centered on the hinge-axis point C, each passing through the
+# "normal foot" on the upper/lower OML skin (tangent to the skin there by
+# construction — see docs/r0_findings/p04.md). The wing cove is a concentric
+# arc at the same C, offset outward by a FIXED radial clearance — replacing
+# the old "deliberate clearance angle" (gap_mm-based cylinder) mechanism with
+# an exact, deflection-invariant offset. See docs/decisions/ADR-002.
+
+# Radial clearance between the CS nose arc and the wing cove arc, both
+# centered on the hinge axis at each station. Fixed (not derived from
+# gap_mm/skin thickness) so it holds exactly at every deflection angle by
+# construction. 5 mm matches typical hinge-line clearance for this wing scale
+# (chords ~200-450 mm) — large enough to never pinch on kernel fuzz, small
+# enough to stay a minor fraction of local thickness at realistic hinge
+# stations.
+COVE_CLEARANCE_MM = 5.0
+
+# If the upper/lower normal-foot radii differ by more than this at a station,
+# build two arcs (Ru from Pu, Rl from Pl) + a blend spline instead of one
+# shared-radius arc. 1.0 mm is small compared to typical half-thickness
+# (5-20 mm at these chords) — near-symmetric feet get the simpler single arc;
+# real camber asymmetry gets the two-arc blend.
+NOSE_RADII_MATCH_MM = 1.0
+
+# Max allowed angular deviation from perpendicular between (C -> normal foot)
+# and the local skin tangent, i.e. how "tangent" the axis-centered arc really
+# is to the skin at that foot. R0 probe measured 0.40° from finite-sample
+# tangent estimation on a real section (docs/r0_findings/p04.md); 2.0° gives
+# ~5x margin over that discretization noise while still catching a real
+# construction defect.
+NOSE_TANGENCY_ANGLE_TOL_DEG = 2.0
+
+# Sampling-grid tolerance for the "cove clearance is exactly COVE_CLEARANCE_MM
+# everywhere" gate check — absorbs per-station loft interpolation between
+# sampled cross-sections, not just kernel fuzz. Matches FACE_TANGENCY_TOLERANCE_MM
+# order of magnitude for consistency across P4's geometric checks.
+COVE_CLEARANCE_TOL_MM = 0.15
+
+# Small blend radius where the wing cove arc meets the OML skin, avoiding a
+# zero-radius reentrant corner (resin-pooling/stress-concentration risk in a
+# real composite mold — common minimum composite tooling corner radius).
+COVE_LEAD_IN_FILLET_MM = 1.0
+
+# The nose region's per-station profile closes with a chord roughly AT the
+# hinge axis (local x≈0), while aft_box_cs starts gap_mm aft of it (the hinge
+# axis is ⟂ to `a` by construction, so this offset is exact at every
+# station) — with no overlap, `nose_region.fuse(aft_box_cs)` sees two
+# non-touching solids and produces 2 disjoint bodies instead of 1. The nose
+# polygon's closing edge is pushed aft by gap_mm + this margin so the two
+# regions genuinely overlap before the union.
+NOSE_AFT_OVERLAP_MM = 2.0
+
+# --- Test infrastructure (not a geometric tolerance, but per-project rule:
+# every numeric constant lives here, none inline) ----------------------------
+
+# Per-test wall-clock budget (pytest-timeout) for any gate test that builds
+# real OCC geometry (device-cut booleans, lofts). A single measured baseline
+# (te_half, full detailed nose/cove checks incl. 5 real OCC re-sections) ran
+# ~260s; 600s gives ~2.3x headroom for a slower device config (e.g. a tilted
+# hinge frame with more complex boolean topology) while still failing loud
+# and fast if a construction change introduces a genuine hang rather than
+# just being slow — "hang vs slow" must be answered by this timeout firing
+# (or not) plus the per-stage timings.py-adjacent JSON, never by a human
+# watching a terminal.
+GEOMETRY_TEST_TIMEOUT_S = 600
