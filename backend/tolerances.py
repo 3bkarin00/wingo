@@ -112,15 +112,19 @@ DEVICE_CUT_VOLUME_CONSERVATION_FRAC = 0.005
 # hazard. 0.1 mm sits far above kernel noise and far below any real gap.
 FACE_TANGENCY_TOLERANCE_MM = 0.1
 
-# --- TE/LE cove-nose per-station arc construction (§8.5, refined) ----------
+# --- TE/LE cove-nose per-station arc construction (§8.5, refined twice —
+# ADR-002 introduced the per-station axis-centered arc; ADR-003 replaced the
+# two-arc/Hermite-blend branch with a single arc + a DERIVED hinge-axis
+# height, after the two-arc blend's curvature discontinuity showed up as a
+# visibly lumpy nose on any twisted config) -------------------------------
 #
-# Per-station 2D construction in planes ⟂ the hinge axis: the CS nose is one
-# or two arcs centered on the hinge-axis point C, each passing through the
-# "normal foot" on the upper/lower OML skin (tangent to the skin there by
-# construction — see docs/r0_findings/p04.md). The wing cove is a concentric
-# arc at the same C, offset outward by a FIXED radial clearance — replacing
-# the old "deliberate clearance angle" (gap_mm-based cylinder) mechanism with
-# an exact, deflection-invariant offset. See docs/decisions/ADR-002.
+# Per-station 2D construction in planes ⟂ the hinge axis: the CS nose is ONE
+# arc centered on the hinge-axis point C, at radius R=(Ru+Rl)/2 where Ru/Rl
+# are the "normal foot" distances to the upper/lower OML skin (tangent to
+# the skin there by construction — see docs/r0_findings/p04.md). The wing
+# cove is a concentric arc at the same C, offset outward by a FIXED radial
+# clearance — an exact, deflection-invariant offset regardless of deflection
+# angle. See docs/decisions/ADR-002, ADR-003.
 
 # Radial clearance between the CS nose arc and the wing cove arc, both
 # centered on the hinge axis at each station. Fixed (not derived from
@@ -131,20 +135,38 @@ FACE_TANGENCY_TOLERANCE_MM = 0.1
 # stations.
 COVE_CLEARANCE_MM = 5.0
 
-# If the upper/lower normal-foot radii differ by more than this at a station,
-# build two arcs (Ru from Pu, Rl from Pl) + a blend spline instead of one
-# shared-radius arc. 1.0 mm is small compared to typical half-thickness
-# (5-20 mm at these chords) — near-symmetric feet get the simpler single arc;
-# real camber asymmetry gets the two-arc blend.
-NOSE_RADII_MATCH_MM = 1.0
+# Max allowed "mean-radius tangency error" at a station: with the two-arc
+# branch deleted (ADR-003), the single nose arc uses R=(Ru+Rl)/2, which
+# deviates from the TRUE per-side radius Ru/Rl by up to |Ru-Rl|/2. Expressed
+# as an angle via arctan(|R-Ru|/Ru) (well-behaved near zero, unlike an
+# arccos-based formulation which has an infinite derivative there and
+# over-reports even a ~0.001mm mismatch as several tenths of a degree —
+# measured directly, see docs/r0_findings/p04.md). Config-time validation
+# (backend/geometry/te_cut.py) REJECTS a config whose worst station exceeds
+# this rather than silently degrading the shape (ADR-003).
+#
+# Calibrated from real measurement, not the literal design-brief suggestion
+# of 0.5°: at a realistic aft hinge_xc (~0.70-0.75, the only region a rear
+# spar leaves valid), tangency error scales roughly linearly with twist at
+# ~1.7deg per degree of tip twist (docs/r0_findings/p04.md) — 0.5° would
+# reject nearly every wing with ANY nonzero twist at a realistic TE hinge
+# position, not just pathological ones. 2.0° accommodates a real, measured
+# 1° tip-twist config (1.70° residual, ~15% margin) while still rejecting
+# the project's own extreme-twist edge case (te_half_twisted.yaml, -8° tip,
+# ~16.75° residual) — the same value this replaces (NOSE_TANGENCY_ANGLE_TOL_DEG,
+# retired) landed on for an unrelated reason (5x R0-probe discretization
+# noise), a coincidence worth noting, not a reused derivation.
+NOSE_TANGENCY_MAX_DEG = 2.0
 
-# Max allowed angular deviation from perpendicular between (C -> normal foot)
-# and the local skin tangent, i.e. how "tangent" the axis-centered arc really
-# is to the skin at that foot. R0 probe measured 0.40° from finite-sample
-# tangent estimation on a real section (docs/r0_findings/p04.md); 2.0° gives
-# ~5x margin over that discretization noise while still catching a real
-# construction defect.
-NOSE_TANGENCY_ANGLE_TOL_DEG = 2.0
+# Anti-unporting angular overlap (design-practice addition, ADR-003): the
+# nose arc must not stop at the tangent points Pu/Pl — it's extended beyond
+# each by (max_deflection_deg + this margin) so the curved nose still
+# overlaps the fixed wing's cove lips at full deflection and never rotates
+# out of the cove ("unporting", exposing its edge to airflow). 4.0° sits in
+# the middle of the 3-5° standard-practice range; no config-specific
+# derivation applies here (unlike the tolerances above) since it's a fixed
+# design margin, not fit to observed geometry.
+OVERLAP_MARGIN_DEG = 4.0
 
 # Sampling-grid tolerance for the "cove clearance is exactly COVE_CLEARANCE_MM
 # everywhere" gate check — absorbs per-station loft interpolation between

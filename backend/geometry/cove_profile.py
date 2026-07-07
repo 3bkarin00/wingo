@@ -1,17 +1,43 @@
-"""Per-station cove/nose arc construction (§8.5, refined — docs/decisions/ADR-002).
+"""Per-station cove/nose SINGLE-arc construction (§8.5, refined —
+docs/decisions/ADR-002, ADR-003).
 
 Sections a solid with a plane PERPENDICULAR to the hinge axis (not a Y-normal
-plane — they differ under sweep/dihedral), finds the "normal foot" (nearest
-point) on the upper/lower skin from the hinge-axis point C, and builds the
-CS-nose / wing-cove profiles as arcs centered on C. An arc through C's nearest
-point to a curve is tangent to that curve there by construction (the
-nearest-point vector is always ⟂ the curve's tangent) — this is the tangency
-mechanism the plan calls for, not a solved/iterated constraint.
+plane — they differ under sweep/dihedral/twist), finds the "normal foot"
+(nearest point) on the upper/lower skin from the hinge-axis point C, and
+builds the CS-nose / wing-cove profiles as arcs centered on C. An arc through
+C's nearest point to a curve is tangent to that curve there by construction
+(the nearest-point vector is always ⟂ the curve's tangent) — this is the
+tangency mechanism the plan calls for, not a solved/iterated constraint.
+
+ADR-003 deleted the old two-arc + Hermite-blend branch: on any twisted
+config the two-arc branch fired at nearly every station (camber + a straight
+hinge axis reliably produce Ru != Rl once the axis is off the true
+equidistant height), and the G1-only blend at the junction is tangent- but
+not curvature-continuous — a real, visible "lump" in the rendered nose, not
+a rendering artifact (confirmed via a tessellation-tolerance rule-out and a
+discrete curvature-angle proxy along the raw construction points — see
+docs/r0_findings/p04.md). The fix is at the ROOT: backend/geometry/
+reference.py now DERIVES the hinge axis height by least-squares fit to the
+true equidistant point at many stations (rather than a straight line between
+2 arithmetic camber-line means), which keeps Ru≈Rl close enough that a
+SINGLE arc at R=(Ru+Rl)/2 is a good approximation everywhere — validated by
+mean_radius_tangency_err_deg() at construction time (backend/geometry/
+te_cut.py), which REJECTS a config outright if any station's residual
+exceeds NOSE_TANGENCY_MAX_DEG rather than silently degrading the shape.
 
 Every profile is returned as a dense ordered point polygon (not OCC arc/spline
 edges) so it can be lofted with the same polygon-wire + ruled=True approach
 already proven for the OML (docs/r0_findings/p02.md) — the "axis-centered"
 property is then exact by direct computation, not an OCC-arc approximation.
+Deliberately NOT a literal OCC circular edge (cq.Edge.makeCircle): mixing a
+true circular edge with the straight aft-closing edges in one wire, then
+ruled-lofting THAT across stations, is unverified behavior this project has
+no R0 probe for (never invent an API) and would risk exactly the kind of
+loft-surface unpredictability the dense-polygon approach was chosen to avoid
+in the first place (r0_findings/p02.md). "Single arc, constant curvature" is
+instead verified on the REAL BUILT SOLID by checking constant radius-from-
+axis on a live OCC section (test_nose_is_single_arc, test_p04_te_cut.py) —
+the same rigor, without the new boundary risk.
 
 PERFORMANCE NOTE: sectioning the OML with `BRepAlgoAPI_Section` (below, kept
 as documented ground truth) costs ~5s per call against the OML's ~200-facet
@@ -52,6 +78,26 @@ class StationFeet:
     angle_u: float  # angle of Pu in the local (a, u) frame, radians
     angle_l: float  # angle of Pl
     tangent_dev_deg: float  # measured C->foot vs skin-tangent deviation from 90°
+
+    @property
+    def R(self) -> float:
+        """Single-arc mean radius (ADR-003) — the CS nose and wing cove at
+        this station both derive from this one value."""
+        return (self.Ru + self.Rl) / 2.0
+
+
+def mean_radius_tangency_err_deg(feet: StationFeet) -> float:
+    """How far the single mean-radius arc (R=(Ru+Rl)/2) deviates from the
+    TRUE per-side radius, expressed as an angle. arctan(|R-Ru|/Ru), not an
+    arccos-based formulation: arccos has an infinite derivative at ratio=1,
+    so it over-reports even a ~0.001mm mismatch as several tenths of a
+    degree (measured directly — see docs/r0_findings/p04.md); arctan is
+    well-behaved near zero and scales close to linearly with the real
+    mismatch for the small angles this construction operates in."""
+    R = feet.R
+    err_u = np.degrees(np.arctan(abs(R - feet.Ru) / feet.Ru))
+    err_l = np.degrees(np.arctan(abs(R - feet.Rl) / feet.Rl))
+    return float(max(err_u, err_l))
 
 
 def section_points(shape: cq.Shape, C: np.ndarray, h: np.ndarray) -> np.ndarray:
@@ -147,87 +193,65 @@ def find_station_feet(pts: np.ndarray, C: np.ndarray, a: np.ndarray, u: np.ndarr
     )
 
 
-def _forward_sweep_angles(angle_l: float, angle_u: float, n: int) -> np.ndarray:
+def _forward_sweep_angles(angle_l: float, angle_u: float, n: int, extension_rad: float = 0.0) -> np.ndarray:
     """Angles from angle_l to angle_u sweeping through the FORWARD side (±π,
     i.e. -a / leading-edge direction) rather than the short way through 0
     (aft, toward the hinge). Pu/Pl sit above/below C, so angle_u > angle_l
     always holds for a real airfoil section; sweeping to angle_u - 2π and
-    decreasing guarantees the pass through -π (≡ π)."""
+    decreasing guarantees the pass through -π (≡ π).
+
+    extension_rad > 0 extends the sweep PAST both true feet by that many
+    radians (anti-unporting angular overlap, ADR-003 addendum A): the sweep
+    decreases from angle_l to (angle_u - 2π), so extending past angle_l
+    (the start) means starting at a HIGHER angle, and extending past
+    angle_u (the end, in the -2π-shifted frame) means ending LOWER."""
     target = angle_u - 2 * np.pi if angle_u > angle_l else angle_u
-    return np.linspace(angle_l, target, n)
+    return np.linspace(angle_l + extension_rad, target - extension_rad, n)
 
 
 def _to_3d(C: np.ndarray, a: np.ndarray, u: np.ndarray, local_xy: np.ndarray) -> np.ndarray:
     return C + np.outer(local_xy[:, 0], a) + np.outer(local_xy[:, 1], u)
 
 
+def _overlap_extension_rad(max_deflection_deg: float, overlap_margin_deg: float) -> float:
+    """Anti-unporting angular overlap (ADR-003 addendum A): the nose arc
+    must not stop at Pu/Pl — standard control-surface practice extends it
+    beyond each tangent point by (max_deflection_deg + a margin) so the
+    curved nose still overlaps the fixed wing's cove lips at full
+    deflection and never rotates out of the cove ("unporting")."""
+    return np.radians(max_deflection_deg + overlap_margin_deg)
+
+
 def build_nose_arc_points(
-    feet: StationFeet, a: np.ndarray, u: np.ndarray, n: int = 48
+    feet: StationFeet, a: np.ndarray, u: np.ndarray,
+    max_deflection_deg: float, overlap_margin_deg: float = tolerances.OVERLAP_MARGIN_DEG,
+    n: int = 48,
 ) -> np.ndarray:
-    """CS-nose forward contour from Pl to Pu (open polyline, 3D), arcs
-    centered on C. Single blended-radius arc if the feet radii match closely;
-    else two true-radius arcs joined by a short Hermite (G1) blend crossing
-    the chord line forward of C."""
-    angles = _forward_sweep_angles(feet.angle_l, feet.angle_u, n)
-
-    if abs(feet.Ru - feet.Rl) <= tolerances.NOSE_RADII_MATCH_MM:
-        # Single arc at the mean radius, blended onto the exact feet at both
-        # ends over the outer 10% of the sweep (a "short G1 blend" — the
-        # branch's own precondition bounds the correction to <= half the
-        # match tolerance).
-        r_mean = (feet.Ru + feet.Rl) / 2.0
-        t = np.linspace(0.0, 1.0, n)
-        blend = np.clip(np.minimum(t, 1 - t) / 0.1, 0.0, 1.0)  # 1 in the middle, ->0 at ends
-        r_end = np.where(t < 0.5, feet.Rl, feet.Ru)
-        radii = blend * r_mean + (1 - blend) * r_end
-    else:
-        # Two true-radius arcs + a Hermite blend crossing angle=π (forward of
-        # C on the chord line), tangent-matched to each arc at the junction.
-        half = n // 2
-        blend_frac = 0.25  # fraction of each half given to the Hermite blend
-        n_arc = int(half * (1 - blend_frac))
-
-        theta_1, theta_2 = angles[n_arc - 1], angles[n - n_arc]
-        p1 = feet.Rl * np.array([np.cos(theta_1), np.sin(theta_1)])
-        p2 = feet.Ru * np.array([np.cos(theta_2), np.sin(theta_2)])
-        # tangent direction of a circle at angle θ, in the sweep direction.
-        dtheta = np.sign(theta_2 - theta_1) or -1.0
-        t1 = dtheta * feet.Rl * np.array([-np.sin(theta_1), np.cos(theta_1)])
-        t2 = dtheta * feet.Ru * np.array([-np.sin(theta_2), np.cos(theta_2)])
-        t1, t2 = t1 / np.linalg.norm(t1), t2 / np.linalg.norm(t2)
-        seg_len = np.linalg.norm(p2 - p1)
-
-        # tt sampled on the OPEN interval (0, 1): tt=0/1 would reproduce p1/p2
-        # exactly, which local[:n_arc]/local[n-n_arc:] already contribute as
-        # their own last/first point — an inclusive endpoint here would give
-        # two consecutive identical points (a zero-length polygon edge) at
-        # each junction. m is unchanged so the total point count stays n,
-        # required for cross-station vertex-count consistency in the loft.
-        m = (n - n_arc) - n_arc
-        tt = np.linspace(0.0, 1.0, m + 2)[1:-1][:, None]
-        h00 = 2 * tt**3 - 3 * tt**2 + 1
-        h10 = tt**3 - 2 * tt**2 + tt
-        h01 = -2 * tt**3 + 3 * tt**2
-        h11 = tt**3 - tt**2
-        blend_xy = h00 * p1 + h10 * seg_len * t1 + h01 * p2 + h11 * seg_len * t2
-
-        local = np.empty((n, 2))
-        local[:n_arc] = feet.Rl * np.column_stack([np.cos(angles[:n_arc]), np.sin(angles[:n_arc])])
-        local[n_arc: n - n_arc] = blend_xy
-        local[n - n_arc:] = feet.Ru * np.column_stack([np.cos(angles[n - n_arc:]), np.sin(angles[n - n_arc:])])
-        return _to_3d(feet.C, a, u, local)
-
-    local = radii[:, None] * np.column_stack([np.cos(angles), np.sin(angles)])
+    """CS-nose forward contour (open polyline, 3D): a SINGLE arc centered on
+    C, constant radius R=(Ru+Rl)/2 (ADR-003 — the two-arc/Hermite-blend
+    branch is deleted entirely; ANY residual asymmetry is bounded by
+    config-time validation in te_cut.py, not patched here with a blend).
+    Extended beyond the true tangent points Pu/Pl by the anti-unporting
+    angular overlap so the nose still overlaps the wing cove at full
+    deflection."""
+    extension = _overlap_extension_rad(max_deflection_deg, overlap_margin_deg)
+    angles = _forward_sweep_angles(feet.angle_l, feet.angle_u, n, extension)
+    local = feet.R * np.column_stack([np.cos(angles), np.sin(angles)])
     return _to_3d(feet.C, a, u, local)
 
 
 def build_cove_arc_points(
-    feet: StationFeet, a: np.ndarray, u: np.ndarray, n: int = 48
+    feet: StationFeet, a: np.ndarray, u: np.ndarray,
+    max_deflection_deg: float, overlap_margin_deg: float = tolerances.OVERLAP_MARGIN_DEG,
+    n: int = 48,
 ) -> np.ndarray:
-    """Wing-cove forward contour from Pl' to Pu' (open polyline, 3D): a single
-    concave arc centered on the SAME C, radius max(Ru, Rl) + COVE_CLEARANCE_MM
-    (never tangent to the nose — see tolerances.py)."""
-    r_cove = max(feet.Ru, feet.Rl) + tolerances.COVE_CLEARANCE_MM
-    angles = _forward_sweep_angles(feet.angle_l, feet.angle_u, n)
+    """Wing-cove forward contour (open polyline, 3D): a single concave arc
+    centered on the SAME C, radius R + COVE_CLEARANCE_MM (never tangent to
+    the nose — see tolerances.py), swept over the SAME extended angular
+    range as the nose arc so the cove fully contains it at every deflection
+    angle up to max_deflection_deg (anti-unporting, ADR-003 addendum A)."""
+    r_cove = feet.R + tolerances.COVE_CLEARANCE_MM
+    extension = _overlap_extension_rad(max_deflection_deg, overlap_margin_deg)
+    angles = _forward_sweep_angles(feet.angle_l, feet.angle_u, n, extension)
     local = r_cove * np.column_stack([np.cos(angles), np.sin(angles)])
     return _to_3d(feet.C, a, u, local)

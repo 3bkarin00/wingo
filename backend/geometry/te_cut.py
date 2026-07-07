@@ -54,9 +54,11 @@ from backend.geometry.cove_profile import (
     build_cove_arc_points,
     build_nose_arc_points,
     find_station_feet,
+    mean_radius_tangency_err_deg,
 )
 from backend.geometry.reference import build_hinge_axes
 from backend.geometry.sections import build_planform_sections
+from backend.schema.errors import ConfigErrorCode, ConfigValidationError
 from backend.schema.models import Config
 
 N_STATIONS = 24  # per-station profiles lofted along the device span
@@ -151,6 +153,29 @@ def _close_nose_polygon(forward_arc: np.ndarray, a: np.ndarray, aft_reach: float
     return np.vstack([forward_arc, p_u + aft_vec, p_l + aft_vec])
 
 
+def _validate_nose_tangency(config_label: str, feet_list: list) -> None:
+    """ADR-003 config-time validation: the single mean-radius nose arc
+    (StationFeet.R) must stay within NOSE_TANGENCY_MAX_DEG of the true
+    per-side radius at every station, or the config is REJECTED outright —
+    never silently degraded with a blend. Reports the WORST station (not
+    just the first failure) so the error message is actionable."""
+    worst_err, worst_i, worst_feet = -1.0, -1, None
+    for i, feet in enumerate(feet_list):
+        err = mean_radius_tangency_err_deg(feet)
+        if err > worst_err:
+            worst_err, worst_i, worst_feet = err, i, feet
+    if worst_err > tolerances.NOSE_TANGENCY_MAX_DEG:
+        raise ConfigValidationError(
+            ConfigErrorCode.NOSE_TANGENCY_EXCEEDS_MAX,
+            f"{config_label}: nose mean-radius tangency error {worst_err:.2f}° exceeds "
+            f"NOSE_TANGENCY_MAX_DEG={tolerances.NOSE_TANGENCY_MAX_DEG}° at station {worst_i} "
+            f"(C={worst_feet.C.tolist()}, Ru={worst_feet.Ru:.3f}mm, Rl={worst_feet.Rl:.3f}mm, "
+            f"|Ru-Rl|={abs(worst_feet.Ru - worst_feet.Rl):.3f}mm) — twist/camber too high for a "
+            f"straight equidistant hinge axis at this hinge_xc. Reduce twist, move hinge_xc, "
+            f"or shorten the control-surface span."
+        )
+
+
 def build_station_profiles(config: Config, sections: list) -> tuple[list, list, list, list]:
     """Returns (station_feet_cove, station_feet_nose, nose_polygons,
     cove_polygons). station_feet_cove/cove_polygons span the full device span
@@ -162,10 +187,16 @@ def build_station_profiles(config: Config, sections: list) -> tuple[list, list, 
     Sections analytically via the ruled-loft definition (fast; see
     cove_profile.py module docstring) rather than the real OCC boolean —
     `sections` is the half-span PlacedSection list build_planform_sections
-    produced for the OML, required to be the SAME list (mirror:false devices)."""
+    produced for the OML, required to be the SAME list (mirror:false devices).
+
+    Nose/cove arcs are single-arc-only (ADR-003), extended angularly beyond
+    the true tangent points by (max_deflection_deg + overlap_margin_deg) so
+    the CS nose never "unports" out of the wing cove at full deflection."""
     te = config.te_surface
     p0, p1, h, a, u, axis_len = hinge_frame(config)
     gap = te.gap_mm
+    max_defl = te.max_deflection_deg
+    overlap_margin = te.overlap_margin_deg if te.overlap_margin_deg is not None else tolerances.OVERLAP_MARGIN_DEG
 
     fracs_full = np.linspace(0.0, 1.0, N_STATIONS)
     s_full = fracs_full * axis_len
@@ -177,7 +208,7 @@ def build_station_profiles(config: Config, sections: list) -> tuple[list, list, 
         pts = analytic_section_points(sections, C, h)
         feet = find_station_feet(pts, C, a, u)
         feet_full.append(feet)
-        cove_polys.append(_close_polygon(build_cove_arc_points(feet, a, u)))
+        cove_polys.append(_close_polygon(build_cove_arc_points(feet, a, u, max_defl, overlap_margin)))
 
     aft_reach = gap + tolerances.NOSE_AFT_OVERLAP_MM
     feet_inset, nose_polys = [], []
@@ -186,12 +217,29 @@ def build_station_profiles(config: Config, sections: list) -> tuple[list, list, 
         pts = analytic_section_points(sections, C, h)
         feet = find_station_feet(pts, C, a, u)
         feet_inset.append(feet)
-        nose_polys.append(_close_nose_polygon(build_nose_arc_points(feet, a, u), a, aft_reach))
+        nose_arc = build_nose_arc_points(feet, a, u, max_defl, overlap_margin)
+        nose_polys.append(_close_nose_polygon(nose_arc, a, aft_reach))
+
+    _validate_nose_tangency(config_label="te_surface", feet_list=feet_inset)
 
     return feet_full, feet_inset, nose_polys, cove_polys
 
 
 def _loft_region(polygons: list[np.ndarray]) -> cq.Solid:
+    """Hard precondition (ADR-003 point 5, not just a gate test): every
+    station profile going into a ruled loft must have IDENTICAL point count
+    — a mixed-topology loft (some stations single-arc-shaped, others with a
+    different point count) is exactly the mechanism that produced the
+    lumpy-nose defect this module was rewritten to fix. Abort with a clear
+    error rather than let OCC stitch mismatched sections into a wavy
+    surface silently."""
+    counts = {len(poly) for poly in polygons}
+    if len(counts) != 1:
+        raise ValueError(
+            f"non-uniform loft topology: station point counts vary ({sorted(counts)}) — "
+            f"every station profile must have identical point count before lofting "
+            f"(ADR-003; a mixed-topology loft silently produces a wavy/lumpy surface)"
+        )
     wires = [cq.Wire.makePolygon([cq.Vector(*p) for p in poly], close=True) for poly in polygons]
     return cq.Solid.makeLoft(wires, ruled=True)
 

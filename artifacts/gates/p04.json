@@ -4,76 +4,97 @@
   "metrics": {
     "bodies": {
       "te_half": {
-        "wing_vol_mm3": 12318852.5,
-        "cs_vol_mm3": 521027.1,
+        "wing_vol_mm3": 12319461.4,
+        "cs_vol_mm3": 519924.1,
         "cache_hit": true
       },
-      "te_half_twisted": {
-        "wing_vol_mm3": 5231103.6,
-        "cs_vol_mm3": 278365.9,
+      "te_half_twisted_moderate": {
+        "wing_vol_mm3": 5222580.1,
+        "cs_vol_mm3": 277347.7,
         "cache_hit": true
       }
     },
     "conservation_pct": {
       "te_half": 0.0,
-      "te_half_twisted": 0.0
+      "te_half_twisted_moderate": 0.0
     },
     "shards": {
       "te_half": 0,
-      "te_half_twisted": 0
+      "te_half_twisted_moderate": 0
     },
-    "nose_tangency_max_dev_deg": {
-      "te_half": 0.192,
-      "te_half_twisted": 1.337
+    "nose_tangency": {
+      "te_half": {
+        "worst_mean_radius_err_deg": 0.003,
+        "worst_normal_foot_dev_deg": 0.201
+      },
+      "te_half_twisted_moderate": {
+        "worst_mean_radius_err_deg": 1.702,
+        "worst_normal_foot_dev_deg": 0.564
+      }
     },
-    "nose_axis_centered": {
+    "nose_is_single_arc": {
       "te_half": {
         "stations_checked": 5,
-        "worst_band_dev_mm": 0.0,
-        "Ru_range": [
-          9.69,
-          11.17
-        ],
-        "Rl_range": [
-          9.61,
-          11.07
-        ]
+        "worst_radius_dev_mm": 0.0119
       },
-      "te_half_twisted": {
+      "te_half_twisted_moderate": {
         "stations_checked": 5,
-        "worst_band_dev_mm": 0.0,
-        "Ru_range": [
-          6.41,
-          6.71
-        ],
-        "Rl_range": [
-          7.63,
-          10.2
-        ]
+        "worst_radius_dev_mm": 0.009
       }
+    },
+    "axis_equidistant_residual_mm": {
+      "te_half": {
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0
+      },
+      "te_half_twisted_moderate": {
+        "min": 0.0015,
+        "max": 0.023,
+        "mean": 0.0101
+      }
+    },
+    "loft_topology": {
+      "te_half": {
+        "nose_points_per_station": 50,
+        "cove_points_per_station": 48
+      },
+      "te_half_twisted_moderate": {
+        "nose_points_per_station": 50,
+        "cove_points_per_station": 48
+      }
+    },
+    "nose_surface_smoothness_spike_ratio": {
+      "te_half": 1.0,
+      "te_half_twisted_moderate": 1.0
+    },
+    "no_unporting_worst_margin_deg": {
+      "te_half": 4.0,
+      "te_half_twisted_moderate": 4.0
     },
     "cove_clearance_mm": {
       "te_half": {
-        "rest": 5.037,
-        "deflected": 5.034
+        "rest": 4.995,
+        "deflected": 4.984
       },
-      "te_half_twisted": {
-        "rest": 4.997,
-        "deflected": 5.042
+      "te_half_twisted_moderate": {
+        "rest": 4.995,
+        "deflected": 4.987
       }
     },
     "interbody_overlap": {
       "te_half": 0,
-      "te_half_twisted": 0
+      "te_half_twisted_moderate": 0
     },
+    "extreme_twist_config_rejected": "[nose_tangency_exceeds_max] te_surface: nose mean-radius tangency error 16.75\u00b0 exceeds NOSE_TANGENCY_MAX_DEG=2.0\u00b0 at station 0 (C=[176.2702029031329, 551.4959648531448, -4.735613257984137], Ru=6.495mm, Rl=10.405mm, |Ru-Rl|=3.910mm) \u2014 twist/camber too high for a straight equidistant hinge axis at this hinge_xc. Reduce twist, move hinge_xc, or shorten the control-surface span.",
     "slow_tier_fresh_build": {
       "te_half": {
         "conservation_pct": 0.0
       },
-      "te_half_twisted": {
+      "te_half_twisted_moderate": {
         "conservation_pct": 0.0
       }
     }
   },
-  "timestamp": "2026-07-07T08:54:02.646722+00:00"
+  "timestamp": "2026-07-07T14:07:10.291264+00:00"
 }

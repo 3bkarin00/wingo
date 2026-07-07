@@ -1,20 +1,18 @@
-# P4 NEGATIVE test case (ADR-003) — half-wing TE surface with -8deg tip
-# washout at a realistic aft hinge_xc (0.72, the only region this config's
-# rear spar leaves valid per HINGE_SPAR_XC_CLEARANCE_FRAC). Measured: this
-# combination produces ~16.75deg mean-radius nose tangency error even with
-# the derived (least-squares equidistant) hinge axis — real geometry, not a
-# construction bug (docs/r0_findings/p04.md) — so it MUST be REJECTED by
-# config-time validation (NOSE_TANGENCY_EXCEEDS_MAX). Used by
-# test_extreme_twist_config_rejected to prove the fail-fast mechanism
-# actually fires, rather than silently degrading the shape. NOT part of the
-# "must successfully build" P4 gate battery — see te_half_twisted_moderate.yaml
-# for the passing twisted-hinge stress case.
+# P4 edge — half-wing TE surface with a REAL, non-trivial tip washout
+# (-1deg) at a realistic aft hinge_xc (0.72). This is the "max-twist" config
+# that must PASS: the tilted (non-Y-normal) hinge axis and the derived
+# (least-squares equidistant) hinge-axis height are both genuinely exercised
+# (measured mean-radius nose tangency error ~1.70deg, comfortably under
+# NOSE_TANGENCY_MAX_DEG=2.0deg — docs/r0_findings/p04.md), unlike
+# te_half_twisted.yaml's -8deg case, which is deliberately too aggressive
+# for a straight hinge axis at this hinge_xc and is kept ONLY as a negative
+# test case for config-time validation (ADR-003).
 planform:
   span_mm: 1100
   segments: [{name: whole, y_end_frac: 1.0, dihedral_deg: 0.0, sweep_le_deg: 0.0}]
   stations:
     - {y_frac: 0.0, chord_mm: 300, twist_deg:  0.0, airfoil: naca2412}
-    - {y_frac: 1.0, chord_mm: 190, twist_deg: -8.0, airfoil: naca2412}
+    - {y_frac: 1.0, chord_mm: 190, twist_deg: -1.0, airfoil: naca2412}
   twist_axis_xc: 0.25
   mirror: false
 airfoils: {sources: [naca4], resample_points: 199, te_min_thickness_mm: 0.8}

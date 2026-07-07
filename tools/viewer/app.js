@@ -96,60 +96,20 @@
     return mesh;
   }
 
-  // ---- assemble scene from VIEWER_DATA ------------------------------------
-
-  var layers = {};
-
-  if (DATA.te_cut) {
-    // P4: show the two cut bodies. Fixed wing translucent so the cove/gap is
-    // visible; control surface opaque amber as the highlighted moving part.
-    layers.wing = indexedMesh(DATA.te_cut.wing, STRUCTURE, 0.28);
-    root.add(layers.wing);
-    layers.cs = indexedMesh(DATA.te_cut.control_surface, KINEMATIC, 0.9);
-    root.add(layers.cs);
-  } else {
-    layers.oml = indexedMesh(DATA.oml, STRUCTURE, 0.32);
-    root.add(layers.oml);
+  function disposeGroup(group) {
+    group.traverse(function (obj) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach(function (m) { m.dispose(); });
+      }
+    });
   }
 
-  Object.keys(DATA.spars).forEach(function (name) {
-    var g = indexedMesh(DATA.spars[name], STRUCTURE, 0.85);
-    root.add(g);
-    layers["spar_" + name] = g;
-  });
-
-  var ribGroup = new THREE.Group();
-  DATA.rib_planes.forEach(function (rib) { ribGroup.add(ribPlane(rib, STRUCTURE)); });
-  root.add(ribGroup);
-  layers.ribs = ribGroup;
-
-  var hingeRadius = Math.max(2, DATA.half_span_mm * 0.0025);
-  var hingeGroup = new THREE.Group();
-  Object.keys(DATA.hinge_axes).forEach(function (name) {
-    var pts = DATA.hinge_axes[name];
-    hingeGroup.add(axisRod(pts[0], pts[1], KINEMATIC, hingeRadius));
-  });
-  root.add(hingeGroup);
-  layers.hinges = hingeGroup;
-
-  var hpGroup = new THREE.Group();
-  var hpRadius = Math.max(3, DATA.half_span_mm * 0.006);
-  DATA.hardpoints.forEach(function (p) { hpGroup.add(hardpointMarker(p, KINEMATIC, hpRadius)); });
-  root.add(hpGroup);
-  layers.hardpoints = hpGroup;
-
-  // ---- fit camera to model -------------------------------------------------
-
-  var box = new THREE.Box3().setFromObject(root);
-  var sphere = box.getBoundingSphere(new THREE.Sphere());
-  var target = sphere.center.clone();
-  var radius = Math.max(sphere.radius, 50);
+  // ---- camera: fit-to-model + hand-rolled orbit controls -------------------
 
   var theta = Math.PI * 0.32;
   var phi = Math.PI * 0.38;
-  var camRadius = radius * 2.4;
-  var minRadius = radius * 0.4;
-  var maxRadius = radius * 8;
+  var camRadius = 1000, minRadius = 100, maxRadius = 8000, target = new THREE.Vector3();
 
   function updateCamera() {
     var x = target.x + camRadius * Math.sin(phi) * Math.sin(theta);
@@ -159,9 +119,17 @@
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
   }
-  updateCamera();
 
-  // ---- hand-rolled orbit controls (drag to orbit, wheel to zoom) ---------
+  function fitCameraToRoot() {
+    var box = new THREE.Box3().setFromObject(root);
+    var sphere = box.getBoundingSphere(new THREE.Sphere());
+    target = sphere.center.clone();
+    var radius = Math.max(sphere.radius, 50);
+    camRadius = radius * 2.4;
+    minRadius = radius * 0.4;
+    maxRadius = radius * 8;
+    updateCamera();
+  }
 
   var dragging = false, lastX = 0, lastY = 0;
   canvas.addEventListener("pointerdown", function (e) {
@@ -187,8 +155,6 @@
     updateCamera();
   }, { passive: false });
 
-  // ---- resize --------------------------------------------------------------
-
   function resize() {
     var w = canvas.clientWidth, h = canvas.clientHeight;
     renderer.setSize(w, h, false);
@@ -203,74 +169,200 @@
     renderer.render(scene, camera);
   })();
 
-  // ---- sidebar: build layer rows from what was actually exported ----------
+  // ---- live hinge deflection (rotates the CS about the REAL hinge axis,   --
+  // ---- not a pre-baked snapshot — this is the same rigid rotation the P4  --
+  // ---- gate applies to prove clearance holds at every angle) ---------------
 
-  var layerRows = DATA.te_cut
-    ? [["wing", "Wing (fixed)", STRUCTURE], ["cs", "Control Surface", KINEMATIC]]
-    : [["oml", "Outer Mold Line", STRUCTURE]];
-  Object.keys(DATA.spars).forEach(function (name) {
-    layerRows.push(["spar_" + name, name.charAt(0).toUpperCase() + name.slice(1) + " Spar", STRUCTURE]);
-  });
-  layerRows.push(["ribs", "Rib Planes (" + DATA.rib_planes.length + ")", STRUCTURE]);
-  if (Object.keys(DATA.hinge_axes).length) {
-    layerRows.push(["hinges", "Hinge Axes", KINEMATIC]);
-  }
-  if (DATA.hardpoints.length) {
-    layerRows.push(["hardpoints", "Hardpoints (" + DATA.hardpoints.length + ")", KINEMATIC]);
+  var deflectionPivot = null; // THREE.Group whose origin sits at the hinge point
+  var currentHingeDir = null;
+
+  function setDeflectionDeg(deg) {
+    if (!deflectionPivot || !currentHingeDir) return;
+    deflectionPivot.setRotationFromAxisAngle(currentHingeDir, (deg * Math.PI) / 180);
   }
 
-  var listEl = document.getElementById("layer-list");
-  layerRows.forEach(function (row) {
-    var key = row[0], label = row[1], color = row[2];
-    var wrap = document.createElement("label");
-    wrap.className = "layer-row";
-    var hex = "#" + color.toString(16).padStart(6, "0");
-    wrap.innerHTML =
-      '<input type="checkbox" checked>' +
-      '<span class="swatch" style="background:' + hex + '"></span>' +
-      '<span class="layer-name">' + label + "</span>";
-    wrap.querySelector("input").addEventListener("change", function (e) {
-      if (layers[key]) layers[key].visible = e.target.checked;
-    });
-    listEl.appendChild(wrap);
-  });
+  // ---- sidebar builders ------------------------------------------------
 
-  // ---- header + capability list -----------------------------------------
-
-  document.getElementById("config-name").textContent = DATA.config_name + ".yaml";
+  var layerListEl = document.getElementById("layer-list");
   var capsEl = document.getElementById("capabilities");
-  DATA.capabilities.forEach(function (line) {
-    var div = document.createElement("div");
-    var m = line.match(/^(P\d+):\s*(.*)$/);
-    div.innerHTML = m ? "<b>" + m[1] + "</b> " + m[2] : line;
-    capsEl.appendChild(div);
-  });
-
-  // ---- stats readout ---------------------------------------------------------
-
-  var triCount = DATA.te_cut
-    ? DATA.te_cut.wing.triangles.length + DATA.te_cut.control_surface.triangles.length
-    : DATA.oml.triangles.length;
-  Object.keys(DATA.spars).forEach(function (n) { triCount += DATA.spars[n].triangles.length; });
-
-  var statLines = [
-    ["config", DATA.config_name],
-    ["half-span", DATA.half_span_mm.toFixed(0) + " mm"],
-    ["triangles", triCount.toLocaleString()],
-    ["rib planes", String(DATA.rib_planes.length)],
-    ["hinge axes", String(Object.keys(DATA.hinge_axes).length)],
-  ];
-  if (DATA.te_cut) {
-    statLines.push(["bodies", "2 (wing + control surf)"]);
-    statLines.push(["cove / nose", DATA.te_cut.cove_radius_mm + " / " + DATA.te_cut.nose_radius_mm + " mm"]);
-  } else {
-    statLines.push(["hardpoints", String(DATA.hardpoints.length)]);
-  }
   var statsEl = document.getElementById("stats");
-  statLines.forEach(function (pair) {
+  var gateEl = document.getElementById("gate-metrics");
+  var deflectionRow = document.getElementById("deflection-row");
+  var deflectionSlider = document.getElementById("deflection-slider");
+  var deflectionLabel = document.getElementById("deflection-label");
+
+  function statRow(container, k, v) {
     var row = document.createElement("div");
     row.className = "stat-row";
-    row.innerHTML = '<span class="stat-key">' + pair[0] + '</span><span class="stat-val">' + pair[1] + "</span>";
-    statsEl.appendChild(row);
+    row.innerHTML = '<span class="stat-key">' + k + '</span><span class="stat-val">' + v + "</span>";
+    container.appendChild(row);
+  }
+
+  var layers = {};
+
+  function rebuildSidebar(data) {
+    capsEl.innerHTML = "";
+    data.capabilities.forEach(function (line) {
+      var div = document.createElement("div");
+      var m = line.match(/^(P\d+):\s*(.*)$/);
+      div.innerHTML = m ? "<b>" + m[1] + "</b> " + m[2] : line;
+      capsEl.appendChild(div);
+    });
+
+    layerListEl.innerHTML = "";
+    var layerRows = data.te_cut
+      ? [["wing", "Wing (fixed)", STRUCTURE], ["cs", "Control Surface", KINEMATIC]]
+      : [["oml", "Outer Mold Line", STRUCTURE]];
+    Object.keys(data.spars).forEach(function (name) {
+      layerRows.push(["spar_" + name, name.charAt(0).toUpperCase() + name.slice(1) + " Spar", STRUCTURE]);
+    });
+    layerRows.push(["ribs", "Rib Planes (" + data.rib_planes.length + ")", STRUCTURE]);
+    if (Object.keys(data.hinge_axes).length) {
+      layerRows.push(["hinge_axes_display", "Hinge Axes", KINEMATIC]);
+    }
+    if (data.hardpoints.length) {
+      layerRows.push(["hardpoints", "Hardpoints (" + data.hardpoints.length + ")", KINEMATIC]);
+    }
+    layerRows.forEach(function (row) {
+      var rowKey = row[0], label = row[1], color = row[2];
+      var wrap = document.createElement("label");
+      wrap.className = "layer-row";
+      var hex = "#" + color.toString(16).padStart(6, "0");
+      wrap.innerHTML =
+        '<input type="checkbox" checked>' +
+        '<span class="swatch" style="background:' + hex + '"></span>' +
+        '<span class="layer-name">' + label + "</span>";
+      wrap.querySelector("input").addEventListener("change", function (e) {
+        if (layers[rowKey]) layers[rowKey].visible = e.target.checked;
+      });
+      layerListEl.appendChild(wrap);
+    });
+
+    var triCount = data.te_cut
+      ? data.te_cut.wing.triangles.length + data.te_cut.control_surface.triangles.length
+      : data.oml.triangles.length;
+    Object.keys(data.spars).forEach(function (n) { triCount += data.spars[n].triangles.length; });
+
+    statsEl.innerHTML = "";
+    statRow(statsEl, "config", data.config_name);
+    statRow(statsEl, "half-span", data.half_span_mm.toFixed(0) + " mm");
+    statRow(statsEl, "triangles", triCount.toLocaleString());
+    statRow(statsEl, "rib planes", String(data.rib_planes.length));
+    statRow(statsEl, "hinge axes", String(Object.keys(data.hinge_axes).length));
+    if (data.te_cut) {
+      statRow(statsEl, "bodies", "2 (wing + control surf)");
+      statRow(statsEl, "nose radius R range", data.te_cut.nose_radius_range_mm.join("–") + " mm");
+      statRow(statsEl, "cove clearance target", data.te_cut.cove_clearance_target_mm + " mm");
+      statRow(statsEl, "anti-unporting margin", data.te_cut.overlap_margin_deg + "°");
+    } else {
+      statRow(statsEl, "hardpoints", String(data.hardpoints.length));
+    }
+
+    gateEl.innerHTML = "";
+    var gm = data.te_cut && data.te_cut.gate_metrics;
+    if (gm) {
+      gateEl.style.display = "";
+      statRow(gateEl, "nose tangency (mean-R)", gm.nose_tangency.worst_mean_radius_err_deg + "° (< 2.0°)");
+      statRow(gateEl, "nose single-arc dev", gm.nose_is_single_arc.worst_radius_dev_mm + " mm");
+      statRow(gateEl, "cove clearance @ 0°", gm.cove_clearance_mm.rest + " mm");
+      statRow(gateEl, "cove clearance @ +max", gm.cove_clearance_mm.deflected + " mm");
+      statRow(gateEl, "no-unporting margin", gm.no_unporting_worst_margin_deg + "°");
+      statRow(gateEl, "volume conservation", gm.conservation_pct + "%");
+      statRow(gateEl, "shards (F3)", String(gm.shards));
+    } else {
+      gateEl.style.display = "none";
+    }
+
+    if (data.te_cut) {
+      deflectionRow.style.display = "";
+      var maxDefl = data.te_cut.max_deflection_deg;
+      deflectionSlider.min = -maxDefl;
+      deflectionSlider.max = maxDefl;
+      deflectionSlider.step = Math.max(0.5, maxDefl / 100);
+      deflectionSlider.value = 0;
+      deflectionLabel.textContent = "0.0°";
+    } else {
+      deflectionRow.style.display = "none";
+    }
+  }
+
+  // ---- scene assembly (re-invokable so a config switch rebuilds in place) --
+
+  function buildScene(data) {
+    disposeGroup(root);
+    root.clear();
+    layers = {};
+    deflectionPivot = null;
+    currentHingeDir = null;
+
+    if (data.te_cut) {
+      layers.wing = indexedMesh(data.te_cut.wing, STRUCTURE, 0.28);
+      root.add(layers.wing);
+
+      var csMesh = indexedMesh(data.te_cut.control_surface, KINEMATIC, 0.9);
+      var hp = data.te_cut.hinge_point, hd = data.te_cut.hinge_dir;
+      deflectionPivot = new THREE.Group();
+      deflectionPivot.position.set(hp[0], hp[1], hp[2]);
+      csMesh.position.set(-hp[0], -hp[1], -hp[2]);
+      deflectionPivot.add(csMesh);
+      root.add(deflectionPivot);
+      currentHingeDir = new THREE.Vector3(hd[0], hd[1], hd[2]).normalize();
+      layers.cs = deflectionPivot; // toggling visibility hides the pivot + its CS child
+    } else {
+      layers.oml = indexedMesh(data.oml, STRUCTURE, 0.32);
+      root.add(layers.oml);
+    }
+
+    Object.keys(data.spars).forEach(function (name) {
+      var g = indexedMesh(data.spars[name], STRUCTURE, 0.85);
+      root.add(g);
+      layers["spar_" + name] = g;
+    });
+
+    var ribGroup = new THREE.Group();
+    data.rib_planes.forEach(function (rib) { ribGroup.add(ribPlane(rib, STRUCTURE)); });
+    root.add(ribGroup);
+    layers.ribs = ribGroup;
+
+    var hingeRadius = Math.max(2, data.half_span_mm * 0.0025);
+    var hingeAxesGroup = new THREE.Group();
+    Object.keys(data.hinge_axes).forEach(function (name) {
+      var pts = data.hinge_axes[name];
+      hingeAxesGroup.add(axisRod(pts[0], pts[1], KINEMATIC, hingeRadius));
+    });
+    root.add(hingeAxesGroup);
+    layers.hinge_axes_display = hingeAxesGroup;
+
+    var hpGroup = new THREE.Group();
+    var hpRadius = Math.max(3, data.half_span_mm * 0.006);
+    data.hardpoints.forEach(function (p) { hpGroup.add(hardpointMarker(p, KINEMATIC, hpRadius)); });
+    root.add(hpGroup);
+    layers.hardpoints = hpGroup;
+
+    fitCameraToRoot();
+    rebuildSidebar(data);
+    document.getElementById("config-name").textContent = data.config_name + ".yaml";
+  }
+
+  // ---- config switcher -----------------------------------------------------
+
+  var configSelect = document.getElementById("config-select");
+  Object.keys(DATA.configs).forEach(function (stem) {
+    var opt = document.createElement("option");
+    opt.value = stem;
+    opt.textContent = stem;
+    configSelect.appendChild(opt);
   });
+  configSelect.value = DATA.default_config;
+  configSelect.addEventListener("change", function () {
+    buildScene(DATA.configs[configSelect.value]);
+  });
+
+  deflectionSlider.addEventListener("input", function () {
+    var deg = parseFloat(deflectionSlider.value);
+    deflectionLabel.textContent = deg.toFixed(1) + "°";
+    setDeflectionDeg(deg);
+  });
+
+  buildScene(DATA.configs[DATA.default_config]);
 })();

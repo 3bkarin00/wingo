@@ -13,6 +13,10 @@ class ConfigErrorCode(str, Enum):
     LE_HINGE_TOO_FAR_AFT = "le_hinge_too_far_aft"
     GAP_BELOW_TOLERANCE = "gap_below_tolerance"
     SANDWICH_STACK_EXCEEDS_THICKNESS = "sandwich_stack_exceeds_thickness"
+    # Geometry-dependent (raised at P4/P5 construction time, not P0 schema
+    # load — analogous to P3's hinge-in-OML containment check, which is also
+    # too geometry-dependent to be a pure config-data rule).
+    NOSE_TANGENCY_EXCEEDS_MAX = "nose_tangency_exceeds_max"
 
 
 class ConfigValidationError(ValueError):

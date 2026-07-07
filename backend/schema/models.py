@@ -118,6 +118,12 @@ class DeviceWindow(BaseModel):
     gap_mm: float = Field(gt=0)
     max_deflection_deg: float = Field(gt=0)
     hinges: Hinges
+    # Anti-unporting angular overlap (ADR-003): the nose arc is extended
+    # beyond the tangent points by (max_deflection_deg + this margin) so it
+    # never rotates out of the wing cove at full deflection. None -> use
+    # tolerances.OVERLAP_MARGIN_DEG; per-config override for an unusual
+    # deflection/geometry combination.
+    overlap_margin_deg: float | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _span_ordered(self) -> "DeviceWindow":

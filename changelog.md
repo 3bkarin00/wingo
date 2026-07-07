@@ -222,3 +222,82 @@ meaningful change: what changed, why, and what it retired/added.
   green (p00-p04). New rule (CLAUDE.md): never re-run a full geometry build
   to answer a question that instrumentation, the build cache, or a single
   parametrized test can answer instead.
+
+## 2026-07-07 (later) — P4: single-arc nose + derived hinge-axis height replaces two-arc/Hermite blend (ADR-003)
+
+- **Report**: the CS nose rendered visibly lumpy — real, not a rendering
+  artifact — on any config with spanwise twist; clean on untwisted ones.
+  Diagnosed on cached/analytic geometry only (no full rebuilds, per the
+  test-architecture rule above): the two-arc branch (ADR-002) fired at
+  *every* nose station on the twisted config (not just near the tip), and a
+  discrete curvature-angle proxy along the raw construction points showed a
+  real spike (std 1.94°, 2.6x the local mean) vs. a clean untwisted profile
+  (std 0.11°, 1.1x) — confirmed geometric via a tessellation-tolerance
+  rule-out (0.5mm vs. 0.05mm tolerance produced the identical
+  vertex/triangle count, so there's no smooth curvature for a finer
+  tolerance to resolve — any lumpiness has to be in the construction).
+- **Root cause, one level deeper than "twist causes asymmetry"**:
+  `build_hinge_axes` placed the hinge axis at the arithmetic MEAN of
+  upper/lower skin z-height at hinge_xc, sampled at only 2 span endpoints —
+  not the same point as the one truly EQUIDISTANT from the upper/lower skin
+  curves (nearest-point distance), except where the skin is locally flat.
+  They diverge even at zero twist (te_half showed a persistent ~0.09mm
+  residual from this alone) and the mismatch compounds under twist because
+  only 2 points ever defined the whole axis.
+- **Fix (ADR-003)**: `backend/geometry/reference.py`'s `derive_hinge_axis`
+  now samples the TRUE equidistant height (found by bisection) at 24
+  stations across the span and fits a straight line through them by least
+  squares (axis must stay perfectly straight — conventions §5); residuals
+  are always reported, never hidden. `cove_profile.py`'s two-arc + Hermite
+  blend branch is deleted entirely — every station's nose is now
+  unconditionally ONE arc at R=(Ru+Rl)/2. Where a config's twist/hinge_xc
+  combination is too aggressive for a straight axis to keep Ru≈Rl close,
+  config-time validation REJECTS it outright (`ConfigErrorCode.
+  NOSE_TANGENCY_EXCEEDS_MAX`, actionable message) rather than silently
+  degrading the shape with a blend.
+- **Calibration, measured not assumed**: `NOSE_TANGENCY_MAX_DEG` ended up
+  2.0°, not the literal 0.5° originally suggested — measured that at any
+  realistic aft hinge_xc (~0.70-0.75, the only region a typical rear spar
+  leaves valid), tangency error scales ~1.7°/degree of tip twist, so 0.5°
+  would reject nearly every wing with ANY nonzero twist at a realistic TE
+  hinge position. Also caught and fixed a bad metric choice along the way:
+  an arccos-based "tangency error" formula has an infinite derivative at
+  ratio=1 and over-reports a ~0.001mm mismatch as several tenths of a
+  degree — switched to arctan(|R-Ru|/Ru), well-behaved near zero.
+- **Config battery split**: `te_half_twisted.yaml` (-8° tip twist) measures
+  ~16.75° tangency error even with the derived axis — genuinely too
+  aggressive, kept ONLY as a deliberate negative test case
+  (`test_extreme_twist_config_rejected`, proves the fail-fast mechanism
+  actually fires). New `te_half_twisted_moderate.yaml` (-1° tip twist, same
+  realistic hinge_xc=0.72) is the "max-twist" config that actually passes
+  (1.70° measured) and joins the standard P4 battery.
+- **Anti-unporting angular overlap** (design-practice addition, same
+  change): the nose arc now extends beyond Pu/Pl by
+  `max_deflection_deg + OVERLAP_MARGIN_DEG` (4.0°) so it stays inside the
+  wing's cove pocket at full deflection rather than rotating out and
+  exposing a bare edge. Verified empirically on the real solid
+  (`test_no_unporting`): rotating the arc's extended endpoint by
+  ±max_deflection and re-measuring its angle confirmed exactly
+  OVERLAP_MARGIN_DEG of margin remains at the tightest case.
+- New gates: `test_nose_is_single_arc` (constant radius on the real built
+  solid — required narrowing the sample window to exclude the anti-
+  unporting extension zone, which is deliberately clipped against the real
+  OML boundary where the constant-R arc would otherwise poke outside it —
+  a real, reproducible, and correct effect, not noise, caught by an initial
+  version of this test and fixed by excluding that angular band rather than
+  loosening the tolerance), `test_nose_tangency` (mean-radius metric),
+  `test_axis_equidistant_residual`, `test_loft_topology_uniform` (also now
+  a hard precondition in `_loft_region` itself, not just a gate),
+  `test_nose_surface_smoothness` (the direct regression test — measured
+  spike ratio exactly 1.0x, i.e. perfectly smooth, on both passing configs
+  post-fix), `test_no_unporting`, `test_extreme_twist_config_rejected`.
+- Explicitly deferred (not this change): CS internal structure (LE
+  spar/web, CS-body ribs, sandwich skin, TE closeout, counterbalance
+  provision, Ansys reinforcement selections) — all already scoped to P6
+  ("Sandwich internals + hardpoints"), P7 ("Hinges"), R2 ("Ansys export
+  package") in plan.md, which build this machinery generically for every
+  device rather than a bespoke CS-only version now.
+- `make gate PHASE=p04` green (25 tests) + `make regress` green (p00-p04).
+  Geometry cache correctly invalidated on the code change (verified: 2
+  pre-redesign cache dirs + 2 new post-redesign ones coexist under distinct
+  hashes, artifacts/cache/).
