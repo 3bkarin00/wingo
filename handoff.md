@@ -1,68 +1,74 @@
 # Handoff — 2026-07-08
 ## State
-- Release/Phase: R1 / P4 DONE and merged-ready (phase/p04 pushed). LE droop
-  dropped from scope entirely (ADR-004) before P5 started — product
-  decision, not a technical finding. P5's phase slot is retired/unused;
-  P6 onward keep their original numbers (no renumbering).
-- Last green gate: p04 (artifacts/gates/p04.json, 25 tests). `make regress`
-  (p00-p04) re-verified green on wingo.coder AFTER the LE-droop removal
-  (schema field + validators + reference.py + one frozen P3 test edit,
-  logged in docs/gate_changes.md) — nothing broke.
+- Release/Phase: R1 / P4 DONE + merged-ready (phase/p04 pushed, PR still
+  needs opening manually — no `gh` CLI in this environment). LE droop
+  dropped from scope entirely (ADR-004) before P5 started. P5's phase slot
+  is retired/unused; branch `phase/p06` created (stacked on phase/p04, not
+  yet merged) for P6 "Sandwich internals + hardpoints" (plan.md §8.7).
+- P6 progress (NOT gated yet — `make gate PHASE=p06` has not been attempted,
+  no `artifacts/gates/p06.json` exists): the IML/sandwich-skin construction
+  for the CLEAN SPAN (away from the TE device window) is implemented
+  (`backend/geometry/iml.py`) and verified against the real kernel on both
+  `te_half.yaml` and `te_half_twisted_moderate.yaml` (one-off script, not a
+  committed gate — see docs/r0_findings/p06.md for the full derivation).
 ## Next single action
-- Branch phase/p06 off main (once phase/p04's PR is merged — push already
-  done, PR still needs opening in the GitHub UI, no `gh` CLI in this
-  environment). Start P6 "Sandwich internals + hardpoints" (plan.md §8.7,
-  §9 P6): IML by 2D per-station offset + second loft + subtract (NEVER OCC
-  shell/thicken, F1); core volume with ramped drop-offs (`ramp_ratio`) at
-  edges/hinge lands/joints/hardpoints; ribs as plane ∩ inner volume with
-  cutouts/holes as 2D face ops pre-thickening; spars trimmed to IML; false
-  spars close the TE device cut faces; midsurface faces constructed
-  alongside the solids, not extracted later. Gate: pairwise boolean
-  interference = 0 across ALL bodies; every auto hardpoint has core
-  ramp-out; IML audit (min wall >= face-sheet stack, sampled); every rib
-  watertight after holes/cutouts; midsurface face count matches structural
-  body count.
+- Continue P6: the device-region follow-on is the next concrete piece —
+  build the false-spar closing wall at the TE cut face + make the
+  sandwich construction correct in the nose/cove-arc region (currently
+  `iml.py` offsets the ORIGINAL uncut airfoil sections everywhere, which is
+  WRONG near the hinge — the wing/CS's actual boundary there is
+  `cove_profile.py`'s arc, not the airfoil skin; `iml.py`'s own module
+  docstring states this limitation explicitly). After that: ramped
+  drop-offs (`ramp_ratio`, station-varying `core_mm` — same offset
+  machinery, no new construction path needed per r0_findings/p06.md), ribs
+  (plane ∩ hollow volume, lightening-hole cutouts as 2D face ops before
+  thickening), spars trimmed to IML (thicken P3's existing ruled spar
+  surfaces), midsurface faces (built alongside solids, not extracted
+  later), then finally `tests/gates/test_p06_sandwich.py` + `make gate
+  PHASE=p06`.
 ## Blockers / open questions
-- None. SSH push works; PRs merged by user in UI (no `gh` CLI available in
-  this environment — PR creation/update for phase/p04 still needs doing
-  manually in the GitHub web UI when ready).
+- None technical. SSH push works; PRs merged by user in UI (no `gh` CLI).
+- wingo.coder's workspace agent can drop connection and/or lose the
+  apt-installed native libs (libGL etc.) across a restart — hit this
+  session, recovered via `docs/known_issues.md`'s existing documented
+  workaround (`sudo apt-get update && sudo apt-get install -y libgl1
+  libglu1-mesa libxrender1 libxext6 libxcursor1 libxinerama1 libxft2
+  libxrandr2 libxi6`). Not a code problem — check this first if cadquery
+  import fails with `libGL.so.1` missing.
 ## Deferred scope (explicit, not forgotten)
-- CS internal structure (LE spar/web carrying hinge tangs, CS-body end
-  ribs, sandwich skin with core ramp-out, TE closeout wedge, optional
-  counterbalance mass-rod channel, wing-side Ansys reinforcement named
-  selections) maps onto P6 ("Sandwich internals + hardpoints", generic for
-  every device — build it there, not bespoke), P7 ("Hinges"), R2 ("Ansys
-  export package").
-- LE droop is NOT deferred — it's dropped (ADR-004). Don't resurrect
-  `le_droop`/P5 without a new explicit product decision; if one comes, it
-  re-adds the schema field, the two removed P0 validators/error codes, and
-  a new `le_cut.py` (the mirrored-`a`-direction construction sketched
-  before the drop — negate the chordwise-aft unit vector so cove_profile.py's
-  existing arc/loft machinery bulges the nose toward the wing correctly on
-  either edge — is still the right approach if this comes back).
+- LE droop is DROPPED (ADR-004), not deferred — don't resurrect without a
+  new explicit product decision.
+- Within P6, explicitly NOT done yet (tracked in the plan approved this
+  session, `/Users/salah/.claude/plans/eager-stargazing-lightning.md`, and
+  above): device-region (nose/cove-arc) sandwich fidelity + false spar;
+  ramped drop-offs; ribs; spar-trim-to-IML; midsurfaces; the real P6 gate
+  test file and `make gate PHASE=p06` run.
 ## Do not touch
-- P0–P4 gates are frozen contracts (docs/gate_changes.md for changes; one
-  entry there now, for the P3 le_droop-reference removal).
-- OML = polygon wires + ruled=True (r0_findings/p02.md). Hinge-axis margin
-  uses distance-to-SHELL (r0_findings/p03.md).
-- Device cove/nose = SINGLE per-station axis-centered arc (ADR-003): nose
-  is one arc at R=(Ru+Rl)/2, extended angularly beyond Pu/Pl by
-  max_deflection+OVERLAP_MARGIN_DEG (anti-unporting). The hinge axis HEIGHT
-  is DERIVED (backend/geometry/reference.py `derive_hinge_axis`,
-  least-squares fit to the true equidistant-from-skin point at 24
-  stations). Config-time validation (NOSE_TANGENCY_MAX_DEG=2.0°) REJECTS a
-  config whose twist/hinge_xc combination can't keep Ru≈Rl close enough —
-  intentional fail-fast, not a bug if a new config gets rejected.
+- P0–P4 gates are frozen contracts (docs/gate_changes.md: one entry, for
+  the P3 le_droop-reference removal).
+- `backend/geometry/iml.py`'s offset sequence is NOT arbitrary — it's the
+  ONLY one consistent with the FROZEN P0 `stack_mm = core + 2*face`
+  formula. R0-derived (docs/r0_findings/p06.md): a SINGLE whole-loop
+  `cq.Wire.offset2D(-d)` pass shrinks local wall thickness by `2d`, not `d`
+  (empirically confirmed, 2.00x). So: `face_sheet_IML =
+  outer.offset2D(-face_mm)` [consumes `2*face_mm`], `hollow_IML =
+  face_sheet_IML.offset2D(-core_mm/2)` [consumes `2*(core_mm/2) =
+  core_mm`] — total `2*face_mm + core_mm == stack_mm` exactly. A naive
+  "offset by face, then by core" (not core/2) would consume MORE than
+  `stack_mm` and silently break the tightest-margin frozen config
+  (`te_half_twisted_moderate.yaml`) even though it passes P0 validation.
+  Never re-derive this from scratch — read r0_findings/p06.md first.
+- `iml.py` is CLEAN-SPAN ONLY (module docstring states this) — do not call
+  `build_sandwich_body` and trust the result inside an enabled device's
+  spanwise window until the device-region follow-on lands.
+- Device cove/nose = SINGLE per-station axis-centered arc (ADR-003); hinge
+  axis height is DERIVED (`derive_hinge_axis`, reference.py). Config-time
+  validation (`NOSE_TANGENCY_MAX_DEG=2.0°`) REJECTS configs that can't keep
+  Ru≈Rl close enough — intentional fail-fast.
 - Gate tests build geometry through `tests/gates/geometry_cache.py` (lazy,
-  indirect-parametrized fixtures) — a `-k <stem>` run must only ever build
-  that one config. Read `artifacts/gates/p04_timings.json` or
-  `--durations=20` to diagnose a slow config; never re-run a full
-  geometry-build gate as a stopwatch.
-- `tests/configs/devices/te_half_twisted.yaml` is a DELIBERATE negative
-  test case (-8° tip twist, correctly rejected by validation) — not part
-  of the "must successfully build" battery.
-- `Config` has no `le_droop` field anymore (ADR-004) — `_enabled_devices()`
-  (backend/schema/validators.py) only ever returns `te_surface`;
-  `ref.hinge_axes` (backend/geometry/reference.py) is still a dict keyed by
-  device name (currently only ever `"te"`), kept that shape deliberately
-  rather than collapsing to a single edge.
+  indirect-parametrized fixtures). Read `artifacts/gates/p04_timings.json`
+  or `--durations=20` to diagnose a slow config; never re-run a full
+  geometry-build gate as a stopwatch. The NEW P6 booleans are genuinely
+  slow too (`build_sandwich_body`'s 3 booleans cost ~110-140s per body on
+  top of the ~55-65s TE cut) — expected, matches P4's own boolean-cost
+  precedent, not a regression to chase.

@@ -340,3 +340,50 @@ meaningful change: what changed, why, and what it retired/added.
   prior gates still pass with the schema/validator/reference.py edits in
   place (25/25 P4 tests, full battery, including the slow-tier fresh
   rebuild).
+
+## 2026-07-08 (later) — P6 kickoff: clean-span IML/sandwich construction
+
+- Branched `phase/p06` (stacked on phase/p04, not yet merged — no `gh` CLI
+  in this environment to open the P4 PR). P6 = plan.md §8.7, "Sandwich
+  internals + hardpoints": IML by 2D per-station offset + second loft +
+  subtract, never OCC shell/thicken (F1).
+- R0-probed BEFORE writing implementation code (`scripts/r0_probes/
+  probe_ocp_offset.py`, `docs/r0_findings/p06.md`) since 2D wire offset is a
+  boundary this project had never touched (P0-P4 used only lofts and
+  booleans). Confirmed `cq.Wire.offset2D(-distance, kind="intersection")` is
+  real and working. Found something that would have been a real, silent
+  bug: a SINGLE whole-loop offset by distance `d` shrinks local
+  upper-to-lower wall thickness by `2d`, not `d` (measured empirically:
+  2.00x, to within 0.007mm) — because offsetting a closed loop moves BOTH
+  walls inward simultaneously. `backend/schema/validators.py`'s FROZEN P0
+  check compares `stack_mm = core.thickness_mm + 2*face_sheet_mm` (ONE core
+  factor) against local thickness; a naive "offset by face, then by core"
+  two-pass construction would consume `2*face+2*core` — MORE than
+  `stack_mm` — silently invalidating the tightest-margin frozen config
+  (`te_half_twisted_moderate.yaml`) even though it passes P0 validation. The
+  offset sequence that consumes EXACTLY `stack_mm` (verified analytically
+  and empirically against that exact config's real numbers): offset by
+  `face_mm` for `face_sheet_IML`, then offset AGAIN by `core_mm/2` (not
+  `core_mm`) for `hollow_IML`.
+- `backend/geometry/iml.py`: `build_sandwich_lofts` (per-station chained
+  offset + `makeLoft(ruled=True)`, matching every prior phase's loft
+  convention) + `build_sandwich_body` (3 booleans via the existing
+  `fuzzy_cut`/`fuzzy_common` helpers — no new boolean machinery). Deliberately
+  scoped to the CLEAN SPAN only (module docstring states this explicitly):
+  near a TE device window, the wing/CS's real boundary is
+  `cove_profile.py`'s cove/nose arc, not the plain airfoil skin, so offsetting
+  the original sections there is wrong — that fidelity + the false-spar
+  closing wall plan.md calls for at the cut face is an explicit, tracked
+  follow-on (handoff.md), not built yet.
+- Verified (one-off instrumented script, not a committed gate — full
+  `test_p06_sandwich.py` waits for the device-region follow-on) against the
+  real kernel on wingo.coder: `te_half.yaml` and `te_half_twisted_moderate.yaml`,
+  sampled at clean-span stations outside each config's `te_surface` window —
+  watertight face_sheet_shell + core_shell, zero shards, positive remaining
+  hollow thickness everywhere sampled. Total wall time ~167s (te_half) /
+  ~201s (twisted) — the 3 new booleans cost ~110-140s per body on top of the
+  existing ~55-65s TE cut, consistent with P4's own documented boolean-cost
+  precedent (not a regression).
+- Not gated yet: `make gate PHASE=p06` has not been run; no
+  `artifacts/gates/p06.json`. This is verified progress toward P6, not a
+  phase completion.
