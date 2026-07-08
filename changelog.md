@@ -301,3 +301,42 @@ meaningful change: what changed, why, and what it retired/added.
   Geometry cache correctly invalidated on the code change (verified: 2
   pre-redesign cache dirs + 2 new post-redesign ones coexist under distinct
   hashes, artifacts/cache/).
+
+## 2026-07-08 — LE droop dropped from scope (ADR-004)
+
+- Product decision, made before P5 ("LE droop cut") started: the vehicle
+  ships with a TE control surface only, no LE device. Not a technical
+  finding — P5's planned construction (mirror the P4 derived-axis/
+  single-arc approach onto the LE hinge by negating the local chordwise
+  direction) would have worked; it was simply descoped.
+- Removed rather than left disabled: `Config.le_droop` field
+  (`backend/schema/models.py`); the TE-vs-LE span-overlap check in
+  `validate_device_windows` (vacuous with one device type — segment-
+  containment stays, since it still applies to `te_surface`); the LE branch
+  of `validate_hinge_vs_spar`; error codes `LE_HINGE_TOO_FAR_AFT` and
+  `DEVICE_WINDOW_OVERLAP` (both now unreachable); the LE branches in
+  `reference.py`'s `build_hinge_axes` and `build_rib_planes`.
+- Test fixtures: deleted `tests/configs/invalid/le_hinge_too_far_aft.yaml`
+  and `device_window_overlap.yaml` (rules no longer exist); rewrote
+  `device_not_segment_contained.yaml` to straddle a segment break with
+  `te_surface` instead of `le_droop` (same rule, still real coverage);
+  stripped the `le_droop` block from `tests/configs/valid/full_example.yaml`
+  and both `tests/configs/edge/devices_*.yaml`.
+- One frozen gate test needed a matching edit:
+  `test_p03_reference.py::test_forced_rib_planes_at_device_edges` dropped
+  its `config.le_droop` branch (would otherwise `AttributeError`) — logged
+  in `docs/gate_changes.md` per the "never edit a gate silently" rule; pass
+  criteria unchanged in substance.
+- Phase numbering: P5 is retired, left as an unused gap rather than
+  renumbering P6 onward (touches zero gate artifacts either way; the
+  renumbering would have touched every P6+ cross-reference in plan.md for
+  no functional benefit). plan.md D3/§6 schema example/§8.4-8.5/P8 wording
+  updated accordingly; `docs/conventions.md` dropped the droop sign-
+  convention line.
+- Historical docs (ADR-002, ADR-003, `docs/r0_findings/p04.md`) left as-is
+  — they're accurate records of what was true/anticipated at the time.
+  ADR-004 is the authoritative pointer going forward.
+- `make regress` green (p00-p04) on wingo.coder after the change — all 5
+  prior gates still pass with the schema/validator/reference.py edits in
+  place (25/25 P4 tests, full battery, including the slow-tier fresh
+  rebuild).

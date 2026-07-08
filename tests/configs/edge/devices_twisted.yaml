@@ -1,5 +1,5 @@
-# Edge: devices + high twist — the F5 scenario that can push a hinge axis
-# outside the OML at mid-span when twist is large.
+# Edge: device + high twist — the F5 scenario that can push a hinge axis
+# outside the OML at mid-span when twist is large. (LE droop dropped, ADR-004.)
 planform:
   span_mm: 2000
   segments: [{name: whole, y_end_frac: 1.0, dihedral_deg: 0.0, sweep_le_deg: 0.0}]
@@ -22,7 +22,4 @@ ribs: {count: 7, construction: {material: cfrp_200gsm_twill, plies: 2}, lighteni
 te_surface: {enabled: true, span_start_frac: 0.50, span_end_frac: 0.90,
              hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
              max_deflection_deg: 25, hinges: {mode: generated, count: 2}}
-le_droop:   {enabled: true, span_start_frac: 0.10, span_end_frac: 0.45,
-             hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
-             max_deflection_deg: 15, hinges: {mode: generated, count: 2}}
 output: {formats: [step, stl, gltf]}

@@ -113,9 +113,6 @@ def test_forced_rib_planes_at_device_edges(cfg_path, gate_metrics):
     if config.te_surface and config.te_surface.enabled:
         expected_y.append(config.te_surface.span_start_frac * half_span_mm)
         expected_y.append(config.te_surface.span_end_frac * half_span_mm)
-    if config.le_droop and config.le_droop.enabled:
-        expected_y.append(config.le_droop.span_start_frac * half_span_mm)
-        expected_y.append(config.le_droop.span_end_frac * half_span_mm)
 
     rib_y_coords = [plane.origin.y for plane in ref.rib_planes]
     for y in expected_y:

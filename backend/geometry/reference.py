@@ -197,11 +197,7 @@ def build_rib_planes(config: Config) -> list[cq.Plane]:
     if config.te_surface and config.te_surface.enabled:
         forced_fracs.add(config.te_surface.span_start_frac)
         forced_fracs.add(config.te_surface.span_end_frac)
-        
-    if config.le_droop and config.le_droop.enabled:
-        forced_fracs.add(config.le_droop.span_start_frac)
-        forced_fracs.add(config.le_droop.span_end_frac)
-        
+
     forced_fracs = sorted(list(forced_fracs))
     remaining = config.ribs.count - len(forced_fracs)
     if remaining < 0:
@@ -238,11 +234,13 @@ def build_rib_planes(config: Config) -> list[cq.Plane]:
 
 
 def build_hinge_axes(config: Config) -> dict[str, cq.Edge]:
-    """TE/LE hinge axes (straight, containment-sampled, DERIVED height —
-    see derive_hinge_axis / module docstring / ADR-003). Discards the
-    per-station residuals this convenience wrapper doesn't need; callers
-    that need them (the P4 axis-fit validation) call derive_hinge_axis
-    directly (backend/geometry/te_cut.py)."""
+    """TE hinge axis (straight, containment-sampled, DERIVED height — see
+    derive_hinge_axis / module docstring / ADR-003). Discards the per-station
+    residuals this convenience wrapper doesn't need; callers that need them
+    (the P4 axis-fit validation) call derive_hinge_axis directly
+    (backend/geometry/te_cut.py). Stays a dict (keyed by device name) rather
+    than collapsing to a single edge — LE droop was dropped (ADR-004) but a
+    future device would slot back in the same way."""
     axes = {}
     if config.te_surface and config.te_surface.enabled:
         p1, p2, _ = derive_hinge_axis(
@@ -250,13 +248,6 @@ def build_hinge_axes(config: Config) -> dict[str, cq.Edge]:
             config.te_surface.hinge_xc_start, config.te_surface.hinge_xc_end,
         )
         axes["te"] = cq.Edge.makeLine(p1, p2)
-
-    if config.le_droop and config.le_droop.enabled:
-        p1, p2, _ = derive_hinge_axis(
-            config, config.le_droop.span_start_frac, config.le_droop.span_end_frac,
-            config.le_droop.hinge_xc_start, config.le_droop.hinge_xc_end,
-        )
-        axes["le"] = cq.Edge.makeLine(p1, p2)
 
     return axes
 

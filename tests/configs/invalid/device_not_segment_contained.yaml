@@ -1,4 +1,6 @@
-# Base: full_example.yaml, with two segments and le_droop straddling the break.
+# Base: full_example.yaml, with two segments and te_surface straddling the
+# break (LE droop dropped, ADR-004 — this now uses te_surface to exercise
+# the same segment-containment rule, which still applies to it).
 expected_error_code: device_not_segment_contained
 
 planform:
@@ -39,12 +41,12 @@ ribs:
   construction: {material: cfrp_200gsm_twill, plies: 3}
   lightening_holes: {enabled: true, margin_mm: 8}
 
-le_droop:
+te_surface:
   enabled: true
   span_start_frac: 0.10   # in segment "center" (0-0.20)...
   span_end_frac: 0.55     # ...but ends in segment "outer" (0.20-1.00) — straddles the break
-  hinge_xc_start: 0.15
-  hinge_xc_end: 0.15
+  hinge_xc_start: 0.75
+  hinge_xc_end: 0.75
   gap_mm: 1.5
   max_deflection_deg: 20
   hinges: {mode: generated, count: 2}

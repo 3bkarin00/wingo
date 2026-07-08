@@ -170,9 +170,9 @@ END:   rewrite handoff.md; verify state.json matches reality; append
 
 A standalone, locally deployed web application that generates a complete,
 manufacturable, analysis-ready parametric composite wing: outer mold line,
-sandwich skin, ribs, spars, trailing-edge control surface, leading-edge droop
-nose, hinges, segment joints, skin latches, fuselage attachment hardpoints, and
-CNC mold tooling — from a single declarative input configuration.
+sandwich skin, ribs, spars, trailing-edge control surface, hinges, segment
+joints, skin latches, fuselage attachment hardpoints, and CNC mold tooling —
+from a single declarative input configuration.
 
 The tool performs **no FEA itself**. Its analysis deliverable is an Ansys-ready
 package whose quality is guaranteed by automated gates plus a formal manual
@@ -184,7 +184,7 @@ Ansys acceptance procedure.
 |---|---|---|
 | D1 | Interaction | Web UI, three.js viewer: body toggles + deflection slider (v1) |
 | D2 | Deployment | Coder cloud workspace, Docker Compose, viewer via port-forward; standalone repo |
-| D3 | Devices | One TE hinged surface + one LE hinged droop per half-span; slats deferred |
+| D3 | Devices | One TE hinged surface per half-span; LE droop dropped from scope (ADR-004), slats deferred |
 | D4 | Device placement | Devices fully contained within one wing segment (else validation error) |
 | D5 | Manufacturing | Composite molded: sandwich skin (foam core + face sheets), molded internals |
 | D6 | Trailing edge | Blunt TE forced, `te_min_thickness_mm` |
@@ -256,7 +256,7 @@ Coder workspace (Docker Compose, ports forwarded)
 - **Twist axis:** user-declared `twist_axis_xc`, stored on every section — never implicit.
 - **Hinge/latch axes:** perfectly straight 3D lines derived FIRST; mechanisms
   defined relative to their axis, never the reverse.
-- **Signs:** TE surface trailing-edge-down positive; droop leading-edge-down positive.
+- **Signs:** TE surface trailing-edge-down positive.
 - **Airfoils:** unit chord, TE→upper→LE→lower→TE, blunt TE enforced, identical
   cosine resampling (`resample_points`, odd) before any placement.
 - **Naming contract:** `SEG-{C|L|R}/BODY-{name}/ROLE-{skin|rib|spar|...}` across
@@ -302,10 +302,6 @@ te_surface:  {enabled: true, span_start_frac: 0.55, span_end_frac: 0.95,
               hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
               max_deflection_deg: 25, hinges: {mode: generated|cots, count: 3, cots_pin_dia_mm: 3.0}}
 
-le_droop:    {enabled: true, span_start_frac: 0.10, span_end_frac: 0.55,
-              hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
-              max_deflection_deg: 20, hinges: {mode: generated, count: 2}}
-
 hardpoints:
   auto: [hinge_lands, joint_housing_zones, fuselage_bosses]
   fuselage_attachment:
@@ -338,10 +334,9 @@ output:
   formats: [step, stl, gltf, cdb, dxf, pdf, layup_csv, layup_json]
 ```
 
-**P0 validation rules (reject with actionable messages):** device windows
-non-overlapping and segment-contained (D4); TE hinge aft of rear spar +
-clearance, LE hinge forward of main spar + clearance; hinge axes contained in
-OML with margin ≥ face+core stack, **sampled along the axis**; core + 2×face ≤
+**P0 validation rules (reject with actionable messages):** device window
+segment-contained (D4); TE hinge aft of rear spar + clearance; hinge axes
+contained in OML with margin ≥ face+core stack, **sampled along the axis**; core + 2×face ≤
 80 % of min local airfoil thickness; `gap_mm` ≥ 2× tessellation tolerance and
 ≥ 10× kernel tolerance; break stations outside device windows; lightening holes
 degrade gracefully (shrink → omit, warn) on small tip ribs.
@@ -374,12 +369,11 @@ housing box with configured clearance.
    per-segment dihedral/sweep; C1 continuity of the unbroken OML at segment joins.
 3. **Master OML loft** (half-span, watertight), mirror for full span.
 4. **Reference geometry before any cut** — spar ruled surfaces; rib planes (auto +
-   forced at device edges and break stations); TE/LE hinge axes (straight,
+   forced at device edges and break stations); TE hinge axis (straight,
    containment-sampled); break planes; hardpoint footprints; latch & boss locations.
 5. **Device cuts** — TE: spanwise gap cuts + chordwise cut, nose rebuilt as
    revolution about hinge axis, concave cove + false spar on wing side, small
-   deliberate clearance angle (never exact tangency, F4). LE droop: mirrored
-   approach; droop keeps original airfoil LE (why droop beat slats).
+   deliberate clearance angle (never exact tangency, F4).
 6. **Segmentation (R1.5)** — break-plane cuts; BOTH spars get male tongues on
    the outer panels (rect hollow or circular tube), built **parallel to the
    horizontal insertion axis by construction** — NOT along the swept spar
@@ -468,9 +462,10 @@ Gate artifacts: `artifacts/gates/pXX.json`. All gates also stream metrics to `ga
   0.5 %; shard filter reports 0 bodies below min-volume threshold (F3); cove
   clearance angle present (no tangent face pairs, F4).
 
-**P5 — LE droop cut**
-- Gate: `make gate PHASE=p05`
-- Pass: 3 watertight bodies; same conservation, shard, tangency criteria.
+**P5 — retired (ADR-004)**
+- LE droop was dropped from scope before this phase started; no phase does
+  this work. Number left unused rather than renumbering P6+ (see ADR-004
+  Consequences) — P0–P4 and P6 onward keep their original gate/phase numbers.
 
 **P6 — Sandwich internals + hardpoints**
 - Scope: §8.7 (includes midsurface construction alongside solids).
@@ -487,8 +482,8 @@ Gate artifacts: `artifacts/gates/pXX.json`. All gates also stream metrics to `ga
 
 **P8 — Kinematic gate (the decisive R1 gate)**
 - Gate: `make gate PHASE=p08`
-- Pass: sweep TE and droop through ±max_deflection: coarse 1° steps + fine 0.1°
-  steps in the outer 20 % of travel; collision count = 0 at every step; minimum
+- Pass: sweep TE through ±max_deflection: coarse 1° steps + fine 0.1° steps in
+  the outer 20 % of travel; collision count = 0 at every step; minimum
   clearance ≥ gap_mm − tolerance and monotonic-trend check; swept-volume boolean
   at both extremes intersect fixed wing = ∅ (F9).
 

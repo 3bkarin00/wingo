@@ -214,7 +214,6 @@ class Config(BaseModel):
     spars: list[Spar] = Field(min_length=1)
     ribs: Ribs
     te_surface: DeviceWindow | None = None
-    le_droop: DeviceWindow | None = None
     hardpoints: Hardpoints = Field(default_factory=Hardpoints)
     joint_retention: JointRetention | None = None
     molds: Molds | None = None
