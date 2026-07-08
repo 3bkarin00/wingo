@@ -78,3 +78,34 @@ implementation (session protocol, CLAUDE.md).
   density).
 - Phase found: p04 (`docs/r0_findings/p04.md`, geometry-cache test
   architecture decision, changelog.md).
+
+## P6 sandwich-shell booleans: hollow_common dominates, and identical boolean workloads vary ~4.6x run-to-run
+
+- Root cause (two separate observations, both from the same instrumented
+  measurements — `SandwichLofts.timings_s`/`SandwichBody.timings_s` in
+  `backend/geometry/iml.py`, on `te_half_twisted_moderate.yaml`):
+  1. **Cost ranking within iml.py**: the per-station wire offsets and both
+     ruled lofts are trivial (0.06s + 0.85s TOTAL). The entire cost is the
+     three downstream booleans, and they are far from equal:
+     `face_sheet_cut` (wing − face_IML) 226.9s, `core_cut` (face_IML −
+     hollow_IML) 33.9s, `hollow_common` (wing ∩ hollow_IML) **370.2s —
+     ~59% of the total on its own**. Two thin nearly-parallel offset
+     shells intersecting a full device-cut body is exactly the
+     near-coincident-face geometry OCC booleans are slowest at.
+  2. **Run-to-run variance on the workspace**: the SAME three booleans,
+     same config, same code, same machine, fresh process both times,
+     measured 136.6s in one run and 631.0s in another (~4.6x) — with no
+     other significant load visible (load avg ~1, single process at
+     ~100% CPU). OCC boolean wall-time on this shared Coder VM is NOT a
+     stable quantity.
+- Workaround: (1) `build_sandwich_body(include_hollow_interior=False)`
+  skips the hollow_common boolean for callers that only need the two
+  shells — the dev viewer export uses this (it renders only the shells);
+  the real P6 pipeline always computes it (ribs/spars are built inside
+  the hollow interior). (2) Never treat a single wall-clock measurement
+  as a config's true cost, and never use a wall-clock ratio between two
+  RUNS as evidence of a code regression — compare per-stage `timings_s`
+  ratios within the same run instead. A "gate suddenly got 4x slower"
+  observation on this workspace is noise until the per-stage breakdown
+  says otherwise.
+- Phase found: p06 (viewer-export integration of `backend/geometry/iml.py`).

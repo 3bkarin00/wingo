@@ -162,6 +162,17 @@
   }
   .curvature-hint { font-size: 10.5px; color: var(--text-dim); line-height: 1.4; }
 
+  .sandwich-panel { display: flex; flex-direction: column; gap: 8px; }
+  .sandwich-warning {
+    padding: 9px 11px;
+    background: rgba(248, 113, 113, 0.06);
+    border: 1px solid rgba(248, 113, 113, 0.22);
+    border-radius: 6px;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
   .rejected-list { display: flex; flex-direction: column; gap: 8px; }
   .rejected-item {
     padding: 9px 11px;
@@ -289,6 +300,11 @@
         lumpiness (ADR-003). Flat = smooth single arc; a spike = a curvature
         discontinuity. Hover to inspect.
       </div>
+    </div>
+
+    <div class="sandwich-panel" id="sandwich-panel" style="display: none;">
+      <div class="section-label" style="margin-bottom: 0;">Sandwich shell (P6 WIP)</div>
+      <div class="sandwich-warning" id="sandwich-warning"></div>
     </div>
 
     <div id="rejected-panel" style="display: none;">

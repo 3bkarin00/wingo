@@ -109,6 +109,57 @@ def _load_gate_metrics(stem: str) -> dict | None:
     }
 
 
+def _sandwich_export(config: Config, sections, res) -> dict:
+    """P6 WIP (backend/geometry/iml.py): clean-span-only face-sheet/core
+    sandwich shells for the wing body. NOT exported for the control surface
+    (its entire extent sits inside/near the TE device window, where this
+    construction is known-wrong — see iml.py's module docstring) and NOT
+    correct for the wing itself within its own te_surface span window either
+    (the boolean has no notion of "skip this region" — it just computes
+    everywhere the wing has material). The viewer must show the device
+    window's y-range alongside this so a viewer of the model isn't misled by
+    the visible artifact there; this export exists to make that artifact
+    inspectable, not to hide it."""
+    import time
+
+    from backend.geometry.iml import build_sandwich_body, build_sandwich_lofts
+
+    # include_hollow_interior=False: the viewer only renders the two shells,
+    # and the skipped body ∩ hollow_IML boolean is the single most expensive
+    # operation in iml.py (~370s measured — see its docstring).
+    lofts = build_sandwich_lofts(config, sections)
+    wing_sw = build_sandwich_body(res.wing, lofts, include_hollow_interior=False)
+    print(f"    sandwich build timings: lofts={lofts.timings_s}, body={wing_sw.timings_s}", flush=True)
+
+    t0 = time.perf_counter()
+    face_tess = _tessellate(wing_sw.face_sheet_shell)
+    t_face = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    core_tess = _tessellate(wing_sw.core_shell)
+    t_core = time.perf_counter() - t0
+    print(f"    sandwich tessellation: face_sheet={t_face:.1f}s ({len(face_tess['triangles'])} tris), "
+          f"core={t_core:.1f}s ({len(core_tess['triangles'])} tris)", flush=True)
+
+    te = config.te_surface
+    half_span_mm = config.planform.span_mm / 2.0 if config.planform.mirror else config.planform.span_mm
+    return {
+        "wing_face_sheet_shell": face_tess,
+        "wing_core_shell": core_tess,
+        "device_window_y_mm": [
+            round(te.span_start_frac * half_span_mm, 1),
+            round(te.span_end_frac * half_span_mm, 1),
+        ],
+        "warning": (
+            "P6 WIP (docs/r0_findings/p06.md): clean-span construction only. "
+            "Within device_window_y_mm (the TE hinge region), the wing's real "
+            "boundary is the cove arc, not the plain airfoil skin used here — "
+            "expect a visible artifact there until the device-region follow-on "
+            "lands. Control surface not shown at all (entirely within/near the "
+            "device window)."
+        ),
+    }
+
+
 def _export_one(cfg_path: Path) -> dict:
     from backend.geometry.te_cut import cut_te_surface, hinge_frame
 
@@ -127,6 +178,7 @@ def _export_one(cfg_path: Path) -> dict:
     # rotate the CS live about the real axis (rather than pre-baking a few
     # fixed deflection snapshots).
     te_cut = None
+    sandwich = None
     if config.te_surface and config.te_surface.enabled and not config.planform.mirror:
         res = cut_te_surface(config, oml)
         p0, _, h, a_dir, u_dir, _ = hinge_frame(config)
@@ -146,6 +198,8 @@ def _export_one(cfg_path: Path) -> dict:
             "gate_metrics": _load_gate_metrics(cfg_path.stem),
             "curvature_check": _curvature_check(res, a_dir, u_dir, max_defl, overlap_margin),
         }
+        print(f"    building P6 sandwich shells (clean-span WIP, ~2-3 min of real booleans)...")
+        sandwich = _sandwich_export(config, sections, res)
 
     capabilities = [
         "P2: sections (scale/twist/dihedral/sweep) + watertight OML loft + mirror",
@@ -158,11 +212,18 @@ def _export_one(cfg_path: Path) -> dict:
             "to the skin by construction, 5mm radial cove clearance invariant under rotation, "
             "nose extended past the tangent points to never unport at full deflection"
         )
+    if sandwich:
+        capabilities.append(
+            "P6 (WIP, clean-span only): face-sheet/core sandwich shell via 2D per-station "
+            "offset + loft + subtract (F1: never OCC shell/thicken) — wrong within the TE "
+            "device window, see the sandwich panel's warning"
+        )
 
     return {
         "config_name": cfg_path.stem,
         "capabilities": capabilities,
         "te_cut": te_cut,
+        "sandwich": sandwich,
         "half_span_mm": (
             config.planform.span_mm / 2.0 if config.planform.mirror else config.planform.span_mm
         ),
@@ -232,9 +293,12 @@ def main() -> int:
         n_tris = len(d["oml"]["triangles"]) + sum(len(s["triangles"]) for s in d["spars"].values())
         if d["te_cut"]:
             n_tris += len(d["te_cut"]["wing"]["triangles"]) + len(d["te_cut"]["control_surface"]["triangles"])
+        if d["sandwich"]:
+            n_tris += (len(d["sandwich"]["wing_face_sheet_shell"]["triangles"])
+                       + len(d["sandwich"]["wing_core_shell"]["triangles"]))
         print(f"  {stem}: {n_tris} triangles, {len(d['rib_planes'])} rib planes, "
               f"{len(d['hinge_axes'])} hinge axes, {len(d['hardpoints'])} hardpoints, "
-              f"te_cut={'yes' if d['te_cut'] else 'no'}")
+              f"te_cut={'yes' if d['te_cut'] else 'no'}, sandwich={'yes (WIP)' if d['sandwich'] else 'no'}")
     print(f"wrote {out_path} ({len(configs)} config(s))")
     return 0
 

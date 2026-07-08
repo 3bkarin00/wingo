@@ -3,6 +3,7 @@
   var DATA = window.VIEWER_DATA;
   var STRUCTURE = 0x4fb2e8;
   var KINEMATIC = 0xf5a742;
+  var SANDWICH = 0xa78bfa; // distinct from structure/kinematic — P6 WIP layers
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -197,6 +198,8 @@
   var curvatureReadout = document.getElementById("curvature-readout");
   var rejectedPanel = document.getElementById("rejected-panel");
   var rejectedList = document.getElementById("rejected-list");
+  var sandwichPanel = document.getElementById("sandwich-panel");
+  var sandwichWarning = document.getElementById("sandwich-warning");
 
   function statRow(container, k, v) {
     var row = document.createElement("div");
@@ -367,6 +370,10 @@
     if (data.hardpoints.length) {
       layerRows.push(["hardpoints", "Hardpoints (" + data.hardpoints.length + ")", KINEMATIC]);
     }
+    if (data.sandwich) {
+      layerRows.push(["sandwich_face", "Face-sheet shell (P6 WIP)", SANDWICH]);
+      layerRows.push(["sandwich_core", "Core shell (P6 WIP)", SANDWICH]);
+    }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
       var wrap = document.createElement("label");
@@ -430,6 +437,15 @@
     }
 
     updateCurvaturePanel(data);
+
+    if (data.sandwich) {
+      sandwichPanel.style.display = "";
+      var dw = data.sandwich.device_window_y_mm;
+      sandwichWarning.textContent = data.sandwich.warning + " Device window: y ∈ [" +
+        dw[0] + ", " + dw[1] + "] mm.";
+    } else {
+      sandwichPanel.style.display = "none";
+    }
   }
 
   // ---- scene assembly (re-invokable so a config switch rebuilds in place) --
@@ -484,6 +500,16 @@
     data.hardpoints.forEach(function (p) { hpGroup.add(hardpointMarker(p, KINEMATIC, hpRadius)); });
     root.add(hpGroup);
     layers.hardpoints = hpGroup;
+
+    if (data.sandwich) {
+      var faceShell = indexedMesh(data.sandwich.wing_face_sheet_shell, SANDWICH, 0.5);
+      root.add(faceShell);
+      layers.sandwich_face = faceShell;
+
+      var coreShell = indexedMesh(data.sandwich.wing_core_shell, SANDWICH, 0.75);
+      root.add(coreShell);
+      layers.sandwich_core = coreShell;
+    }
 
     fitCameraToRoot();
     rebuildSidebar(data);

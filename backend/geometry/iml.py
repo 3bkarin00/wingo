@@ -36,7 +36,8 @@ follow-on, not implemented here. Callers should only trust
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 import cadquery as cq
 
@@ -51,13 +52,15 @@ from backend.schema.models import Config
 class SandwichLofts:
     face_sheet_iml_solid: cq.Solid
     hollow_iml_solid: cq.Solid
+    timings_s: dict = field(default_factory=dict)
 
 
 @dataclass
 class SandwichBody:
     face_sheet_shell: cq.Shape
     core_shell: cq.Shape
-    hollow_interior: cq.Shape
+    hollow_interior: cq.Shape | None  # None when skipped (include_hollow_interior=False)
+    timings_s: dict = field(default_factory=dict)
 
 
 def _offset_wire(wire: cq.Wire, distance_mm: float) -> cq.Wire:
@@ -84,7 +87,9 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     region limitation."""
     face_mm = face_sheet_thickness_mm(config)
     core_mm = config.skin.core.thickness_mm
+    timings: dict = {}
 
+    t0 = time.perf_counter()
     face_sheet_wires, hollow_wires = [], []
     for sec in sections:
         outer_wire = build_section_wire(sec.points)
@@ -92,25 +97,55 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
         hollow_wire = _offset_wire(face_wire, core_mm / 2.0)
         face_sheet_wires.append(face_wire)
         hollow_wires.append(hollow_wire)
+    timings["offset_wires_s"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    face_sheet_iml_solid = cq.Solid.makeLoft(face_sheet_wires, ruled=True)
+    hollow_iml_solid = cq.Solid.makeLoft(hollow_wires, ruled=True)
+    timings["lofts_s"] = time.perf_counter() - t0
 
     return SandwichLofts(
-        face_sheet_iml_solid=cq.Solid.makeLoft(face_sheet_wires, ruled=True),
-        hollow_iml_solid=cq.Solid.makeLoft(hollow_wires, ruled=True),
+        face_sheet_iml_solid=face_sheet_iml_solid,
+        hollow_iml_solid=hollow_iml_solid,
+        timings_s=timings,
     )
 
 
-def build_sandwich_body(body: cq.Shape, lofts: SandwichLofts) -> SandwichBody:
+def build_sandwich_body(
+    body: cq.Shape, lofts: SandwichLofts, include_hollow_interior: bool = True
+) -> SandwichBody:
     """Cuts the per-station lofts (built over the FULL original span) against
     the ACTUAL device-cut body — the boolean naturally restricts each layer
     to wherever `body` really has material, so this is safe to call on
     either `wing` or `control_surface` from a P4 TeCutResult, PROVIDED the
     query point/region is away from the device's spanwise window (module
-    docstring)."""
+    docstring).
+
+    `include_hollow_interior=False` skips the body ∩ hollow_IML boolean —
+    measured as the single most expensive operation in this module (370s on
+    te_half_twisted_moderate, ~59% of the total; see docs/known_issues.md) —
+    for callers that only need the two shells (e.g. the dev viewer export).
+    The P6 pipeline itself always needs it (ribs/spars are built inside it),
+    so it defaults to True."""
+    timings: dict = {}
+
+    t0 = time.perf_counter()
     face_sheet_shell = fuzzy_cut(body, lofts.face_sheet_iml_solid)
+    timings["face_sheet_cut_s"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     core_shell = fuzzy_cut(lofts.face_sheet_iml_solid, lofts.hollow_iml_solid)
-    hollow_interior = fuzzy_common(body, lofts.hollow_iml_solid)
+    timings["core_cut_s"] = time.perf_counter() - t0
+
+    hollow_interior = None
+    if include_hollow_interior:
+        t0 = time.perf_counter()
+        hollow_interior = fuzzy_common(body, lofts.hollow_iml_solid)
+        timings["hollow_common_s"] = time.perf_counter() - t0
+
     return SandwichBody(
         face_sheet_shell=face_sheet_shell,
         core_shell=core_shell,
         hollow_interior=hollow_interior,
+        timings_s=timings,
     )
