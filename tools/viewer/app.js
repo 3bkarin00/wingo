@@ -190,6 +190,13 @@
   var deflectionRow = document.getElementById("deflection-row");
   var deflectionSlider = document.getElementById("deflection-slider");
   var deflectionLabel = document.getElementById("deflection-label");
+  var curvaturePanel = document.getElementById("curvature-panel");
+  var curvatureStationSelect = document.getElementById("curvature-station-select");
+  var curvatureBadge = document.getElementById("curvature-badge");
+  var curvatureCanvas = document.getElementById("curvature-canvas");
+  var curvatureReadout = document.getElementById("curvature-readout");
+  var rejectedPanel = document.getElementById("rejected-panel");
+  var rejectedList = document.getElementById("rejected-list");
 
   function statRow(container, k, v) {
     var row = document.createElement("div");
@@ -197,6 +204,143 @@
     row.innerHTML = '<span class="stat-key">' + k + '</span><span class="stat-val">' + v + "</span>";
     container.appendChild(row);
   }
+
+  // ---- nose curvature chart (canvas) — the exact diagnostic that caught  --
+  // ---- and confirmed the fix for the lumpy-nose defect (ADR-003)         --
+
+  var curvatureStations = []; // current config's te_cut.curvature_check.stations
+  var curvatureHoverIdx = -1;
+
+  function drawCurvatureChart(station) {
+    var ctx = curvatureCanvas.getContext("2d");
+    var w = curvatureCanvas.width, h = curvatureCanvas.height;
+    var pad = { l: 34, r: 10, t: 10, b: 16 };
+    var plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    var kink = station.kink_deg;
+
+    ctx.clearRect(0, 0, w, h);
+
+    var maxVal = Math.max.apply(null, kink);
+    var scaleMax = Math.max(maxVal * 1.2, station.mean_deg * 1.4, 0.02);
+
+    function x(i) { return pad.l + (i / (kink.length - 1)) * plotW; }
+    function y(v) { return pad.t + plotH - (v / scaleMax) * plotH; }
+
+    // axes
+    ctx.strokeStyle = "rgba(124, 134, 152, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t);
+    ctx.lineTo(pad.l, pad.t + plotH);
+    ctx.lineTo(pad.l + plotW, pad.t + plotH);
+    ctx.stroke();
+
+    // mean reference (dashed) — "flat at the mean" is the smooth signature
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "rgba(124, 134, 152, 0.55)";
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y(station.mean_deg));
+    ctx.lineTo(pad.l + plotW, y(station.mean_deg));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // data line
+    ctx.strokeStyle = "#f5a742";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    kink.forEach(function (v, i) {
+      var px = x(i), py = y(v);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // hover crosshair + point
+    if (curvatureHoverIdx >= 0 && curvatureHoverIdx < kink.length) {
+      var hx = x(curvatureHoverIdx), hy = y(kink[curvatureHoverIdx]);
+      ctx.strokeStyle = "rgba(221, 227, 238, 0.3)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(hx, pad.t);
+      ctx.lineTo(hx, pad.t + plotH);
+      ctx.stroke();
+      ctx.fillStyle = "#f5a742";
+      ctx.beginPath();
+      ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // axis labels
+    ctx.fillStyle = "#7c8698";
+    ctx.font = "9.5px ui-monospace, monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(scaleMax.toFixed(2) + "°", pad.l - 5, pad.t + 8);
+    ctx.fillText("0°", pad.l - 5, pad.t + plotH + 2);
+    ctx.textAlign = "left";
+    ctx.fillText("Pl-side", pad.l, h - 3);
+    ctx.textAlign = "right";
+    ctx.fillText("Pu-side", pad.l + plotW, h - 3);
+  }
+
+  function updateCurvatureReadout(station) {
+    if (curvatureHoverIdx >= 0 && curvatureHoverIdx < station.kink_deg.length) {
+      curvatureReadout.textContent =
+        "point " + curvatureHoverIdx + "/" + station.kink_deg.length +
+        ": " + station.kink_deg[curvatureHoverIdx].toFixed(3) + "° (mean " + station.mean_deg.toFixed(3) + "°)";
+    } else {
+      curvatureReadout.textContent = "mean " + station.mean_deg.toFixed(3) + "° across " + station.kink_deg.length + " points — hover the chart to inspect a point";
+    }
+  }
+
+  curvatureCanvas.addEventListener("mousemove", function (e) {
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (!station) return;
+    var rect = curvatureCanvas.getBoundingClientRect();
+    var px = (e.clientX - rect.left) * (curvatureCanvas.width / rect.width);
+    var pad = { l: 34, r: 10 };
+    var plotW = curvatureCanvas.width - pad.l - pad.r;
+    var frac = Math.min(Math.max((px - pad.l) / plotW, 0), 1);
+    curvatureHoverIdx = Math.round(frac * (station.kink_deg.length - 1));
+    drawCurvatureChart(station);
+    updateCurvatureReadout(station);
+  });
+  curvatureCanvas.addEventListener("mouseleave", function () {
+    curvatureHoverIdx = -1;
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (station) { drawCurvatureChart(station); updateCurvatureReadout(station); }
+  });
+
+  function renderCurvatureStation() {
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (!station) return;
+    curvatureHoverIdx = -1;
+    drawCurvatureChart(station);
+    updateCurvatureReadout(station);
+    var good = station.spike_ratio < 1.5; // matches the gate's own bound (test_nose_surface_smoothness)
+    curvatureBadge.textContent = station.spike_ratio.toFixed(2) + "x spike";
+    curvatureBadge.className = "spike-badge " + (good ? "good" : "attention");
+  }
+
+  function updateCurvaturePanel(data) {
+    var check = data.te_cut && data.te_cut.curvature_check;
+    if (!check) {
+      curvaturePanel.style.display = "none";
+      return;
+    }
+    curvaturePanel.style.display = "";
+    curvatureStations = check.stations;
+    curvatureStationSelect.innerHTML = "";
+    check.stations.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.textContent = s.label + " (spanwise)";
+      curvatureStationSelect.appendChild(opt);
+    });
+    curvatureStationSelect.selectedIndex = Math.floor(check.stations.length / 2); // default: mid-span
+    renderCurvatureStation();
+  }
+
+  curvatureStationSelect.addEventListener("change", renderCurvatureStation);
 
   var layers = {};
 
@@ -284,6 +428,8 @@
     } else {
       deflectionRow.style.display = "none";
     }
+
+    updateCurvaturePanel(data);
   }
 
   // ---- scene assembly (re-invokable so a config switch rebuilds in place) --
@@ -343,6 +489,26 @@
     rebuildSidebar(data);
     document.getElementById("config-name").textContent = data.config_name + ".yaml";
   }
+
+  // ---- rejected configs (global, not per-config-switch — ADR-003's        --
+  // ---- config-time validation firing correctly on a deliberately too-     --
+  // ---- aggressive twist/hinge_xc combination) -------------------------------
+
+  (function renderRejectedPanel() {
+    var rejected = DATA.rejected || {};
+    var stems = Object.keys(rejected);
+    if (!stems.length) { rejectedPanel.style.display = "none"; return; }
+    rejectedPanel.style.display = "";
+    rejectedList.innerHTML = "";
+    stems.forEach(function (stem) {
+      var item = document.createElement("div");
+      item.className = "rejected-item";
+      item.innerHTML =
+        '<div class="rejected-name">' + stem + ".yaml</div>" +
+        '<div class="rejected-reason">' + rejected[stem].message + "</div>";
+      rejectedList.appendChild(item);
+    });
+  })();
 
   // ---- config switcher -----------------------------------------------------
 

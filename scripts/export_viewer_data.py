@@ -12,6 +12,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +45,46 @@ def _rib_rectangle(y_mm: float, chord_mm: float) -> list[list[float]]:
     return [
         [x0, y_mm, z0], [x1, y_mm, z0], [x1, y_mm, z1], [x0, y_mm, z1],
     ]
+
+
+def _curvature_angle_proxy(pts: np.ndarray) -> np.ndarray:
+    """Angle (deg) between consecutive segments at each interior point — the
+    exact diagnostic that caught the lumpy-nose defect (docs/r0_findings/
+    p04.md): a smooth arc has a small, roughly CONSTANT value; a curvature
+    discontinuity shows as a spike. Reimplemented here (not imported from
+    tests/gates/test_p04_te_cut.py) to keep this production/dev script from
+    depending on test code — same six lines, same formula."""
+    d1 = pts[1:-1] - pts[:-2]
+    d2 = pts[2:] - pts[1:-1]
+    d1n = d1 / np.linalg.norm(d1, axis=1, keepdims=True)
+    d2n = d2 / np.linalg.norm(d2, axis=1, keepdims=True)
+    cos_a = np.clip(np.sum(d1n * d2n, axis=1), -1.0, 1.0)
+    return np.degrees(np.arccos(cos_a))
+
+
+def _curvature_check(res, a: np.ndarray, u: np.ndarray, max_defl: float, overlap_margin: float) -> dict:
+    """Curvature-angle proxy at 5 representative nose stations (root/25%/
+    50%/75%/tip of the nose span) — lets the viewer plot the SAME curve that
+    diagnosed and confirmed the ADR-003 fix, not just report a pass/fail."""
+    from backend.geometry.cove_profile import build_nose_arc_points
+
+    stations = res.stations_nose
+    n = len(stations)
+    idxs = sorted(set([0, n // 4, n // 2, (3 * n) // 4, n - 1]))
+    labels = ["root", "25%", "50%", "75%", "tip"]
+
+    out = []
+    for label, i in zip(labels, idxs):
+        f = stations[i]
+        pts = build_nose_arc_points(f, a, u, max_defl, overlap_margin)
+        kink = _curvature_angle_proxy(pts)
+        out.append({
+            "label": label,
+            "kink_deg": [round(float(k), 4) for k in kink],
+            "mean_deg": round(float(kink.mean()), 4),
+            "spike_ratio": round(float(kink.max() / max(kink.mean(), 1e-9)), 3),
+        })
+    return {"stations": out}
 
 
 def _load_gate_metrics(stem: str) -> dict | None:
@@ -88,19 +129,22 @@ def _export_one(cfg_path: Path) -> dict:
     te_cut = None
     if config.te_surface and config.te_surface.enabled and not config.planform.mirror:
         res = cut_te_surface(config, oml)
-        p0, _, h, _, _, _ = hinge_frame(config)
+        p0, _, h, a_dir, u_dir, _ = hinge_frame(config)
         r_vals = [f.R for f in res.stations_nose]
+        max_defl = config.te_surface.max_deflection_deg
+        overlap_margin = config.te_surface.overlap_margin_deg or tolerances.OVERLAP_MARGIN_DEG
         te_cut = {
             "wing": _tessellate(res.wing),
             "control_surface": _tessellate(res.control_surface),
             "gap_volume_mm3": round(res.gap_volume_mm3, 1),
             "hinge_point": list(p0),
             "hinge_dir": list(h),
-            "max_deflection_deg": config.te_surface.max_deflection_deg,
-            "overlap_margin_deg": config.te_surface.overlap_margin_deg or tolerances.OVERLAP_MARGIN_DEG,
+            "max_deflection_deg": max_defl,
+            "overlap_margin_deg": overlap_margin,
             "nose_radius_range_mm": [round(min(r_vals), 2), round(max(r_vals), 2)],
             "cove_clearance_target_mm": tolerances.COVE_CLEARANCE_MM,
             "gate_metrics": _load_gate_metrics(cfg_path.stem),
+            "curvature_check": _curvature_check(res, a_dir, u_dir, max_defl, overlap_margin),
         }
 
     capabilities = [
@@ -161,6 +205,7 @@ def main() -> int:
     cfg_paths = [Path(a) for a in args] or sorted((ROOT / "tests/configs/devices").glob("te_*.yaml"))
 
     configs = {}
+    rejected = {}
     for cfg_path in cfg_paths:
         print(f"exporting {cfg_path.stem} ...")
         try:
@@ -168,13 +213,16 @@ def main() -> int:
         except ConfigValidationError as e:
             # Some device configs are DELIBERATE negative test cases
             # (ADR-003, e.g. te_half_twisted.yaml) — correctly rejected by
-            # config-time validation, not a viewer bug. Skip, don't crash
-            # the whole export batch over an intentional rejection.
+            # config-time validation, not a viewer bug. Skip building it,
+            # but keep the reason so the viewer can show the fail-fast
+            # mechanism actually fired, not just silently omit the config.
             print(f"  SKIPPED (config-time validation rejected it): {e}")
+            rejected[cfg_path.stem] = {"code": e.code.value, "message": str(e)}
 
     data = {
         "default_config": "te_half_twisted_moderate" if "te_half_twisted_moderate" in configs else next(iter(configs)),
         "configs": configs,
+        "rejected": rejected,
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
