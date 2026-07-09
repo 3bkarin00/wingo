@@ -387,3 +387,36 @@ meaningful change: what changed, why, and what it retired/added.
 - Not gated yet: `make gate PHASE=p06` has not been run; no
   `artifacts/gates/p06.json`. This is verified progress toward P6, not a
   phase completion.
+
+## 2026-07-09 — P6: body-restricted core (defect fix) + upper/lower skin split
+
+- Two changes to `backend/geometry/iml.py`, both driven by product review of
+  the rendered output in the dev viewer:
+  1. **Defect fix**: the core band (`face_IML − hollow_IML`) was never
+     intersected with the actual body, so it passed uncut through the TE
+     control-surface pocket (the face sheet was body-derived and correct;
+     the core visibly wasn't). Now `core_shell = band ∩ body`.
+  2. **Upper/lower split** (product requirement): skins are delivered as
+     separate upper/lower shells — matching molded-composite reality (one
+     skin per mold half, D5/§8.9) and the later per-surface Ansys
+     midsurfaces. Split via a "below-camber" parting prism built from
+     already-probed machinery only (camber polyline exact by midpointing
+     paired placed points — resample.py guarantees a shared cosine x-grid —
+     extended 5% chord past LE/TE, closed downward, ruled-lofted;
+     `lower = ring ∩ prism`, `upper = ring − prism`). PROVISIONAL parting:
+     P15/P16's real max-half-breadth parting curve supersedes this for
+     tooling. Full derivation + F4 reasoning in docs/r0_findings/p06.md
+     addendum.
+- Also this session (earlier commits): per-stage `timings_s` instrumentation
+  in iml.py (te_cut.py convention) diagnosed the viewer-export slowdown —
+  the body ∩ hollow_IML boolean alone cost 370s (~59%) and its result was
+  unused by the viewer, now skippable via `include_hollow_interior=False`;
+  plus a docs/known_issues.md entry for the measured ~4.6x run-to-run OCC
+  boolean variance on the workspace (wall-clock deltas between runs are
+  noise unless per-stage breakdowns agree).
+- Verification is now folded into the export path itself (no extra
+  booleans): zero shards, watertight kept solids, and upper+lower exactly
+  partitioning each ring (<0.1%) asserted on every export, both configs.
+- Viewer: 4 toggleable sandwich layers (upper/lower × face/core, face
+  sheets violet / cores pink) replacing the 2 ring layers; warning panel
+  notes the camber-line split is provisional.

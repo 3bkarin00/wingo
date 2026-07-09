@@ -111,53 +111,84 @@ def _load_gate_metrics(stem: str) -> dict | None:
 
 def _sandwich_export(config: Config, sections, res) -> dict:
     """P6 WIP (backend/geometry/iml.py): clean-span-only face-sheet/core
-    sandwich shells for the wing body. NOT exported for the control surface
-    (its entire extent sits inside/near the TE device window, where this
-    construction is known-wrong — see iml.py's module docstring) and NOT
-    correct for the wing itself within its own te_surface span window either
-    (the boolean has no notion of "skip this region" — it just computes
-    everywhere the wing has material). The viewer must show the device
-    window's y-range alongside this so a viewer of the model isn't misled by
-    the visible artifact there; this export exists to make that artifact
-    inspectable, not to hide it."""
+    sandwich shells for the wing body, split into upper/lower per mold half.
+    NOT exported for the control surface (its entire extent sits inside/near
+    the TE device window, where the offset construction is still known-wrong
+    for the cove-arc boundary — see iml.py's module docstring); the wing's
+    own te_surface span window carries the same caveat, so the viewer shows
+    the window's y-range alongside these layers.
+
+    Every layer is now restricted to the actual wing body (booleans against
+    res.wing), so the shells DO follow the device cut — the first exported
+    version didn't restrict the core band and it visibly sailed through the
+    CS pocket, caught in the viewer. In-run assertions below re-verify the
+    construction on every export (volume sums over already-computed shapes —
+    no extra booleans): zero shards, every kept solid watertight, and the
+    upper+lower pair exactly partitioning each ring."""
     import time
 
+    from backend.geometry.booleans import filter_shards
     from backend.geometry.iml import build_sandwich_body, build_sandwich_lofts
+    from backend.geometry.loft import is_watertight
 
-    # include_hollow_interior=False: the viewer only renders the two shells,
-    # and the skipped body ∩ hollow_IML boolean is the single most expensive
+    # include_hollow_interior=False: the viewer only renders shells, and the
+    # skipped body ∩ hollow_IML boolean is the single most expensive
     # operation in iml.py (~370s measured — see its docstring).
     lofts = build_sandwich_lofts(config, sections)
     wing_sw = build_sandwich_body(res.wing, lofts, include_hollow_interior=False)
     print(f"    sandwich build timings: lofts={lofts.timings_s}, body={wing_sw.timings_s}", flush=True)
 
+    def _checked_volume(label: str, shape) -> float:
+        solids, shards = filter_shards(shape)
+        assert not shards, f"sandwich {label}: {len(shards)} shard(s) (F3)"
+        assert solids, f"sandwich {label}: no solids survived"
+        assert all(is_watertight(s) for s in solids), f"sandwich {label}: not watertight"
+        return sum(s.Volume() for s in solids)
+
+    vol = {
+        label: _checked_volume(label, shape)
+        for label, shape in [
+            ("face_ring", wing_sw.face_sheet_shell), ("core_ring", wing_sw.core_shell),
+            ("face_upper", wing_sw.face_sheet_upper), ("face_lower", wing_sw.face_sheet_lower),
+            ("core_upper", wing_sw.core_upper), ("core_lower", wing_sw.core_lower),
+        ]
+    }
+    for ring, up, lo in [("face_ring", "face_upper", "face_lower"),
+                         ("core_ring", "core_upper", "core_lower")]:
+        dev = abs(vol[up] + vol[lo] - vol[ring]) / vol[ring]
+        assert dev < 1e-3, (
+            f"sandwich {ring}: upper+lower deviates {dev*100:.4f}% from the ring "
+            f"({vol[up]:.1f} + {vol[lo]:.1f} vs {vol[ring]:.1f}) — split is not a partition"
+        )
+    print(f"    sandwich verified: volumes(mm^3)={ {k: round(v, 1) for k, v in vol.items()} } "
+          f"(partition + watertight + no shards)", flush=True)
+
     t0 = time.perf_counter()
-    face_tess = _tessellate(wing_sw.face_sheet_shell)
-    t_face = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    core_tess = _tessellate(wing_sw.core_shell)
-    t_core = time.perf_counter() - t0
-    print(f"    sandwich tessellation: face_sheet={t_face:.1f}s ({len(face_tess['triangles'])} tris), "
-          f"core={t_core:.1f}s ({len(core_tess['triangles'])} tris)", flush=True)
+    tess = {
+        "wing_face_sheet_upper": _tessellate(wing_sw.face_sheet_upper),
+        "wing_face_sheet_lower": _tessellate(wing_sw.face_sheet_lower),
+        "wing_core_upper": _tessellate(wing_sw.core_upper),
+        "wing_core_lower": _tessellate(wing_sw.core_lower),
+    }
+    print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
+          f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
 
     te = config.te_surface
     half_span_mm = config.planform.span_mm / 2.0 if config.planform.mirror else config.planform.span_mm
-    return {
-        "wing_face_sheet_shell": face_tess,
-        "wing_core_shell": core_tess,
-        "device_window_y_mm": [
-            round(te.span_start_frac * half_span_mm, 1),
-            round(te.span_end_frac * half_span_mm, 1),
-        ],
-        "warning": (
-            "P6 WIP (docs/r0_findings/p06.md): clean-span construction only. "
-            "Within device_window_y_mm (the TE hinge region), the wing's real "
-            "boundary is the cove arc, not the plain airfoil skin used here — "
-            "expect a visible artifact there until the device-region follow-on "
-            "lands. Control surface not shown at all (entirely within/near the "
-            "device window)."
-        ),
-    }
+    tess["device_window_y_mm"] = [
+        round(te.span_start_frac * half_span_mm, 1),
+        round(te.span_end_frac * half_span_mm, 1),
+    ]
+    tess["warning"] = (
+        "P6 WIP (docs/r0_findings/p06.md): clean-span construction only. "
+        "Within device_window_y_mm (the TE hinge region), the wing's real "
+        "boundary is the cove arc, not the plain airfoil skin used here — "
+        "expect a visible artifact there until the device-region follow-on "
+        "lands. Control surface not shown at all (entirely within/near the "
+        "device window). Skins split upper/lower at the camber line "
+        "(provisional parting; real mold parting curve lands in P15/P16)."
+    )
+    return tess
 
 
 def _export_one(cfg_path: Path) -> dict:
@@ -294,8 +325,11 @@ def main() -> int:
         if d["te_cut"]:
             n_tris += len(d["te_cut"]["wing"]["triangles"]) + len(d["te_cut"]["control_surface"]["triangles"])
         if d["sandwich"]:
-            n_tris += (len(d["sandwich"]["wing_face_sheet_shell"]["triangles"])
-                       + len(d["sandwich"]["wing_core_shell"]["triangles"]))
+            n_tris += sum(
+                len(d["sandwich"][k]["triangles"])
+                for k in ("wing_face_sheet_upper", "wing_face_sheet_lower",
+                          "wing_core_upper", "wing_core_lower")
+            )
         print(f"  {stem}: {n_tris} triangles, {len(d['rib_planes'])} rib planes, "
               f"{len(d['hinge_axes'])} hinge axes, {len(d['hardpoints'])} hardpoints, "
               f"te_cut={'yes' if d['te_cut'] else 'no'}, sandwich={'yes (WIP)' if d['sandwich'] else 'no'}")

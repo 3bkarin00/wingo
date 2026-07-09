@@ -1,4 +1,4 @@
-# Handoff — 2026-07-08
+# Handoff — 2026-07-09
 ## State
 - Release/Phase: R1 / P4 DONE + merged-ready (phase/p04 pushed, PR still
   needs opening manually — no `gh` CLI in this environment). LE droop
@@ -9,8 +9,15 @@
   no `artifacts/gates/p06.json` exists): the IML/sandwich-skin construction
   for the CLEAN SPAN (away from the TE device window) is implemented
   (`backend/geometry/iml.py`) and verified against the real kernel on both
-  `te_half.yaml` and `te_half_twisted_moderate.yaml` (one-off script, not a
-  committed gate — see docs/r0_findings/p06.md for the full derivation).
+  `te_half.yaml` and `te_half_twisted_moderate.yaml`. All layers are
+  body-restricted (a first version's core band wasn't — it sailed uncut
+  through the CS pocket, caught by product review in the dev viewer), and
+  skins are delivered SPLIT into upper/lower shells via a camber-line
+  parting prism (provisional parting — P15/P16's real max-half-breadth
+  parting curve supersedes it for tooling). Verification asserts run inside
+  the viewer-export path itself on every export: zero shards, watertight,
+  upper+lower exactly partitions each ring. See docs/r0_findings/p06.md
+  (incl. addendum) for the full derivation.
 ## Next single action
 - Continue P6: the device-region follow-on is the next concrete piece —
   build the false-spar closing wall at the TE cut face + make the
@@ -68,7 +75,16 @@
 - Gate tests build geometry through `tests/gates/geometry_cache.py` (lazy,
   indirect-parametrized fixtures). Read `artifacts/gates/p04_timings.json`
   or `--durations=20` to diagnose a slow config; never re-run a full
-  geometry-build gate as a stopwatch. The NEW P6 booleans are genuinely
-  slow too (`build_sandwich_body`'s 3 booleans cost ~110-140s per body on
-  top of the ~55-65s TE cut) — expected, matches P4's own boolean-cost
-  precedent, not a regression to chase.
+  geometry-build gate as a stopwatch. The P6 booleans are genuinely slow
+  (face-sheet cut alone 226-292s measured) AND their wall-time varies
+  ~4.6x run-to-run on the workspace with identical inputs
+  (docs/known_issues.md) — a wall-clock delta between two runs is noise
+  unless the per-stage `timings_s` breakdown agrees. `build_sandwich_body`'s
+  `include_hollow_interior=False` exists because the hollow-interior boolean
+  is the single most expensive one (~370s) and the viewer doesn't need it;
+  the real P6 pipeline ALWAYS computes it (ribs/spars live inside it).
+- The upper/lower skin split's camber pairing (`_camber_polyline`) relies on
+  resample.py's contract: odd point count, upper/lower on the SAME cosine
+  x-grid, shared LE, canonical TE→upper→LE→lower→TE order. If resampling
+  ever changes, that helper breaks silently — the export-path partition
+  assert is what catches it.
