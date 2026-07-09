@@ -420,3 +420,32 @@ meaningful change: what changed, why, and what it retired/added.
 - Viewer: 4 toggleable sandwich layers (upper/lower × face/core, face
   sheets violet / cores pink) replacing the 2 ring layers; warning panel
   notes the camber-line split is provisional.
+
+## 2026-07-09 — P6: 3-layer sandwich panel correction (missing inner face sheet)
+
+- Product review (user): a sandwich panel is **outer face sheet / core /
+  inner face sheet per wall** — the construction so far delivered only an
+  outer face and a half-thickness core. Root cause: the original R0
+  derivation treated the frozen P0 `stack_mm = core + 2*face` formula as a
+  TOTAL two-wall consumption budget and chose offsets (`face_mm`, then
+  `core_mm/2`) to match it, silently deleting the inner face sheet.
+  Corrected reading: `stack_mm` is the PER-WALL panel thickness (exactly how
+  the P3 hinge-margin gate already uses it); the correct chain is full-value
+  `face_mm, core_mm, face_mm`, consuming `2*stack_mm` locally in total.
+- New R0 probe (`scripts/r0_probes/probe_ocp_offset_3layer.py`, results in
+  docs/r0_findings/p06.md): triple chain verified on the real kernel —
+  mid-chord consumption 5.590 vs 5.600mm expected; on over-packed sections
+  (2*stack up to 7.6mm vs 5.5mm local) the innermost offsets SELF-CLIP to a
+  single valid closed wire, clipped-tip lofts stay valid, rings shard-free,
+  volume conservation exact. The aft wall-merge on over-packed frozen
+  configs (te_half_twisted_moderate, devices_full, high_taper) is accepted
+  and documented — the physical treatment is ramped drop-offs (D11) / the
+  P6 gate IML audit. NO frozen gate, validator, or config was changed.
+- `backend/geometry/iml.py`: `SandwichLofts` now carries three IML lofts
+  (face/core/hollow); `SandwichBody` delivers three body-restricted rings
+  (face_outer/core/face_inner), each split upper/lower → 6 shells.
+- Export verification extended to all 3 rings (partition + watertight +
+  no-shards asserted on every export); viewer shows 6 toggleable layers
+  (outer faces violet, cores pink, inner faces teal).
+- docs/r0_findings/p06.md: old derivation marked SUPERSEDED in place +
+  full correction addendum.

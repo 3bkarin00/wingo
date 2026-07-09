@@ -110,21 +110,22 @@ def _load_gate_metrics(stem: str) -> dict | None:
 
 
 def _sandwich_export(config: Config, sections, res) -> dict:
-    """P6 WIP (backend/geometry/iml.py): clean-span-only face-sheet/core
-    sandwich shells for the wing body, split into upper/lower per mold half.
-    NOT exported for the control surface (its entire extent sits inside/near
-    the TE device window, where the offset construction is still known-wrong
-    for the cove-arc boundary — see iml.py's module docstring); the wing's
-    own te_surface span window carries the same caveat, so the viewer shows
-    the window's y-range alongside these layers.
+    """P6 WIP (backend/geometry/iml.py): clean-span-only sandwich shells for
+    the wing body — THREE layers per wall (outer face sheet / core / inner
+    face sheet), each split into upper/lower per mold half. NOT exported for
+    the control surface (its entire extent sits inside/near the TE device
+    window, where the offset construction is still known-wrong for the
+    cove-arc boundary — see iml.py's module docstring); the wing's own
+    te_surface span window carries the same caveat, so the viewer shows the
+    window's y-range alongside these layers.
 
-    Every layer is now restricted to the actual wing body (booleans against
+    Every layer is restricted to the actual wing body (booleans against
     res.wing), so the shells DO follow the device cut — the first exported
     version didn't restrict the core band and it visibly sailed through the
     CS pocket, caught in the viewer. In-run assertions below re-verify the
     construction on every export (volume sums over already-computed shapes —
     no extra booleans): zero shards, every kept solid watertight, and the
-    upper+lower pair exactly partitioning each ring."""
+    upper+lower pair exactly partitioning each of the three rings."""
     import time
 
     from backend.geometry.booleans import filter_shards
@@ -132,8 +133,8 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     from backend.geometry.loft import is_watertight
 
     # include_hollow_interior=False: the viewer only renders shells, and the
-    # skipped body ∩ hollow_IML boolean is the single most expensive
-    # operation in iml.py (~370s measured — see its docstring).
+    # skipped body ∩ hollow_IML boolean is among the most expensive
+    # operations in iml.py (~370-670s measured — see its docstring).
     lofts = build_sandwich_lofts(config, sections)
     wing_sw = build_sandwich_body(res.wing, lofts, include_hollow_interior=False)
     print(f"    sandwich build timings: lofts={lofts.timings_s}, body={wing_sw.timings_s}", flush=True)
@@ -148,27 +149,37 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     vol = {
         label: _checked_volume(label, shape)
         for label, shape in [
-            ("face_ring", wing_sw.face_sheet_shell), ("core_ring", wing_sw.core_shell),
-            ("face_upper", wing_sw.face_sheet_upper), ("face_lower", wing_sw.face_sheet_lower),
+            ("face_outer_ring", wing_sw.face_outer_shell),
+            ("core_ring", wing_sw.core_shell),
+            ("face_inner_ring", wing_sw.face_inner_shell),
+            ("face_outer_upper", wing_sw.face_outer_upper),
+            ("face_outer_lower", wing_sw.face_outer_lower),
             ("core_upper", wing_sw.core_upper), ("core_lower", wing_sw.core_lower),
+            ("face_inner_upper", wing_sw.face_inner_upper),
+            ("face_inner_lower", wing_sw.face_inner_lower),
         ]
     }
-    for ring, up, lo in [("face_ring", "face_upper", "face_lower"),
-                         ("core_ring", "core_upper", "core_lower")]:
+    for ring, up, lo in [
+        ("face_outer_ring", "face_outer_upper", "face_outer_lower"),
+        ("core_ring", "core_upper", "core_lower"),
+        ("face_inner_ring", "face_inner_upper", "face_inner_lower"),
+    ]:
         dev = abs(vol[up] + vol[lo] - vol[ring]) / vol[ring]
         assert dev < 1e-3, (
             f"sandwich {ring}: upper+lower deviates {dev*100:.4f}% from the ring "
             f"({vol[up]:.1f} + {vol[lo]:.1f} vs {vol[ring]:.1f}) — split is not a partition"
         )
     print(f"    sandwich verified: volumes(mm^3)={ {k: round(v, 1) for k, v in vol.items()} } "
-          f"(partition + watertight + no shards)", flush=True)
+          f"(3-ring partition + watertight + no shards)", flush=True)
 
     t0 = time.perf_counter()
     tess = {
-        "wing_face_sheet_upper": _tessellate(wing_sw.face_sheet_upper),
-        "wing_face_sheet_lower": _tessellate(wing_sw.face_sheet_lower),
+        "wing_face_outer_upper": _tessellate(wing_sw.face_outer_upper),
+        "wing_face_outer_lower": _tessellate(wing_sw.face_outer_lower),
         "wing_core_upper": _tessellate(wing_sw.core_upper),
         "wing_core_lower": _tessellate(wing_sw.core_lower),
+        "wing_face_inner_upper": _tessellate(wing_sw.face_inner_upper),
+        "wing_face_inner_lower": _tessellate(wing_sw.face_inner_lower),
     }
     print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
           f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
@@ -185,8 +196,12 @@ def _sandwich_export(config: Config, sections, res) -> dict:
         "boundary is the cove arc, not the plain airfoil skin used here — "
         "expect a visible artifact there until the device-region follow-on "
         "lands. Control surface not shown at all (entirely within/near the "
-        "device window). Skins split upper/lower at the camber line "
-        "(provisional parting; real mold parting curve lands in P15/P16)."
+        "device window). Panel is 3 layers per wall (outer face / core / "
+        "inner face); where a section is locally thinner than two full "
+        "panels (aft ~10% chord near the tip) the walls merge into solid "
+        "laminate — expected until ramped drop-offs (D11). Layers split "
+        "upper/lower at the camber line (provisional parting; real mold "
+        "parting curve lands in P15/P16)."
     )
     return tess
 
@@ -245,9 +260,9 @@ def _export_one(cfg_path: Path) -> dict:
         )
     if sandwich:
         capabilities.append(
-            "P6 (WIP, clean-span only): face-sheet/core sandwich shell via 2D per-station "
-            "offset + loft + subtract (F1: never OCC shell/thicken) — wrong within the TE "
-            "device window, see the sandwich panel's warning"
+            "P6 (WIP, clean-span only): 3-layer sandwich shells (outer face / core / inner "
+            "face per wall) via 2D per-station offset + loft + subtract (F1: never OCC "
+            "shell/thicken) — wrong within the TE device window, see the sandwich panel's warning"
         )
 
     return {
@@ -327,8 +342,9 @@ def main() -> int:
         if d["sandwich"]:
             n_tris += sum(
                 len(d["sandwich"][k]["triangles"])
-                for k in ("wing_face_sheet_upper", "wing_face_sheet_lower",
-                          "wing_core_upper", "wing_core_lower")
+                for k in ("wing_face_outer_upper", "wing_face_outer_lower",
+                          "wing_core_upper", "wing_core_lower",
+                          "wing_face_inner_upper", "wing_face_inner_lower")
             )
         print(f"  {stem}: {n_tris} triangles, {len(d['rib_planes'])} rib planes, "
               f"{len(d['hinge_axes'])} hinge axes, {len(d['hardpoints'])} hardpoints, "

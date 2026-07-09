@@ -8,16 +8,17 @@
 - P6 progress (NOT gated yet — `make gate PHASE=p06` has not been attempted,
   no `artifacts/gates/p06.json` exists): the IML/sandwich-skin construction
   for the CLEAN SPAN (away from the TE device window) is implemented
-  (`backend/geometry/iml.py`) and verified against the real kernel on both
-  `te_half.yaml` and `te_half_twisted_moderate.yaml`. All layers are
-  body-restricted (a first version's core band wasn't — it sailed uncut
-  through the CS pocket, caught by product review in the dev viewer), and
-  skins are delivered SPLIT into upper/lower shells via a camber-line
+  (`backend/geometry/iml.py`) as the corrected THREE-layer panel — outer
+  face sheet / core / inner face sheet per wall (product review caught the
+  first version missing the inner face sheet; a second review earlier caught
+  the core band not being body-restricted). All three rings are
+  body-restricted and split into upper/lower shells via a camber-line
   parting prism (provisional parting — P15/P16's real max-half-breadth
   parting curve supersedes it for tooling). Verification asserts run inside
   the viewer-export path itself on every export: zero shards, watertight,
-  upper+lower exactly partitions each ring. See docs/r0_findings/p06.md
-  (incl. addendum) for the full derivation.
+  upper+lower exactly partitions each of the 3 rings. See
+  docs/r0_findings/p06.md (SUPERSEDED marker + both addenda) for the full
+  derivation history.
 ## Next single action
 - Continue P6: the device-region follow-on is the next concrete piece —
   build the false-spar closing wall at the TE cut face + make the
@@ -53,18 +54,19 @@
 ## Do not touch
 - P0–P4 gates are frozen contracts (docs/gate_changes.md: one entry, for
   the P3 le_droop-reference removal).
-- `backend/geometry/iml.py`'s offset sequence is NOT arbitrary — it's the
-  ONLY one consistent with the FROZEN P0 `stack_mm = core + 2*face`
-  formula. R0-derived (docs/r0_findings/p06.md): a SINGLE whole-loop
-  `cq.Wire.offset2D(-d)` pass shrinks local wall thickness by `2d`, not `d`
-  (empirically confirmed, 2.00x). So: `face_sheet_IML =
-  outer.offset2D(-face_mm)` [consumes `2*face_mm`], `hollow_IML =
-  face_sheet_IML.offset2D(-core_mm/2)` [consumes `2*(core_mm/2) =
-  core_mm`] — total `2*face_mm + core_mm == stack_mm` exactly. A naive
-  "offset by face, then by core" (not core/2) would consume MORE than
-  `stack_mm` and silently break the tightest-margin frozen config
-  (`te_half_twisted_moderate.yaml`) even though it passes P0 validation.
-  Never re-derive this from scratch — read r0_findings/p06.md first.
+- `backend/geometry/iml.py`'s offset chain is the full-value triple
+  `face_mm, core_mm, face_mm` — a sandwich panel is 3 layers PER WALL, and
+  the frozen P0 `stack_mm = core + 2*face` is the PER-WALL panel thickness
+  (same reading the P3 hinge-margin gate uses), NOT a two-wall budget. The
+  first implementation got this wrong (offsets `face_mm, core_mm/2`, no
+  inner face sheet) by treating stack_mm as total consumption — do not
+  regress to that. Total local consumption is `2*stack_mm`; where a section
+  is thinner (aft ~10% chord at the tip on te_half_twisted_moderate,
+  devices_full, high_taper) the innermost offsets SELF-CLIP
+  (kind="intersection") and walls merge into solid laminate — R0-verified
+  safe (probe_ocp_offset_3layer.py: single valid closed wires, valid lofts,
+  exact conservation), accepted until ramped drop-offs (D11)/P6 gate IML
+  audit. Read r0_findings/p06.md (superseded marker + addenda) first.
 - `iml.py` is CLEAN-SPAN ONLY (module docstring states this) — do not call
   `build_sandwich_body` and trust the result inside an enabled device's
   spanwise window until the device-region follow-on lands.

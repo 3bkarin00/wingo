@@ -3,8 +3,9 @@
   var DATA = window.VIEWER_DATA;
   var STRUCTURE = 0x4fb2e8;
   var KINEMATIC = 0xf5a742;
-  var SANDWICH = 0xa78bfa; // face-sheet shells — distinct from structure/kinematic (P6 WIP)
+  var SANDWICH = 0xa78bfa; // OUTER face-sheet shells — distinct from structure/kinematic (P6 WIP)
   var SANDWICH_CORE = 0xf472b6; // core shells — distinct from face sheets AND the status red
+  var SANDWICH_INNER = 0x2dd4bf; // INNER face-sheet shells — third layer of the panel
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -372,10 +373,12 @@
       layerRows.push(["hardpoints", "Hardpoints (" + data.hardpoints.length + ")", KINEMATIC]);
     }
     if (data.sandwich) {
-      layerRows.push(["sandwich_face_upper", "Upper face sheet (P6 WIP)", SANDWICH]);
-      layerRows.push(["sandwich_face_lower", "Lower face sheet (P6 WIP)", SANDWICH]);
+      layerRows.push(["sandwich_face_outer_upper", "Upper outer face (P6 WIP)", SANDWICH]);
+      layerRows.push(["sandwich_face_outer_lower", "Lower outer face (P6 WIP)", SANDWICH]);
       layerRows.push(["sandwich_core_upper", "Upper core (P6 WIP)", SANDWICH_CORE]);
       layerRows.push(["sandwich_core_lower", "Lower core (P6 WIP)", SANDWICH_CORE]);
+      layerRows.push(["sandwich_face_inner_upper", "Upper inner face (P6 WIP)", SANDWICH_INNER]);
+      layerRows.push(["sandwich_face_inner_lower", "Lower inner face (P6 WIP)", SANDWICH_INNER]);
     }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
@@ -505,10 +508,12 @@
     layers.hardpoints = hpGroup;
 
     if (data.sandwich) {
-      [["sandwich_face_upper", "wing_face_sheet_upper", SANDWICH, 0.5],
-       ["sandwich_face_lower", "wing_face_sheet_lower", SANDWICH, 0.5],
+      [["sandwich_face_outer_upper", "wing_face_outer_upper", SANDWICH, 0.5],
+       ["sandwich_face_outer_lower", "wing_face_outer_lower", SANDWICH, 0.5],
        ["sandwich_core_upper", "wing_core_upper", SANDWICH_CORE, 0.75],
-       ["sandwich_core_lower", "wing_core_lower", SANDWICH_CORE, 0.75]].forEach(function (row) {
+       ["sandwich_core_lower", "wing_core_lower", SANDWICH_CORE, 0.75],
+       ["sandwich_face_inner_upper", "wing_face_inner_upper", SANDWICH_INNER, 0.85],
+       ["sandwich_face_inner_lower", "wing_face_inner_lower", SANDWICH_INNER, 0.85]].forEach(function (row) {
         var mesh = indexedMesh(data.sandwich[row[1]], row[2], row[3]);
         root.add(mesh);
         layers[row[0]] = mesh;

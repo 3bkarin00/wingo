@@ -2,34 +2,42 @@
 
 IML by **2D per-station offset + second loft + subtract** — never OCC
 shell/thicken (F1). R0-probed before any of this was written
-(docs/r0_findings/p06.md, scripts/r0_probes/probe_ocp_offset.py):
-`cq.Wire.offset2D(-distance, kind="intersection")` is the real,
-confirmed-working API.
+(docs/r0_findings/p06.md, scripts/r0_probes/probe_ocp_offset.py and
+probe_ocp_offset_3layer.py): `cq.Wire.offset2D(-distance, kind="intersection")`
+is the real, confirmed-working API, and a single whole-loop offset by `d`
+shrinks local (upper-to-lower) thickness by `2d` — both walls move inward
+simultaneously.
 
-The critical fact that R0 established: a SINGLE whole-loop offset by distance
-`d` shrinks local (upper-to-lower) wall thickness by `2d`, not `d` — both
-walls move inward simultaneously in one pass. `backend/schema/validators.py`'s
-FROZEN P0 check compares `stack_mm = core.thickness_mm + 2*face_sheet_mm`
-(ONE core factor) against local thickness, so the ONLY offset sequence whose
-total consumption exactly equals `stack_mm` — and is therefore safe for every
-config P0 already accepts, with no change to tolerances.py — is:
+THE PANEL IS THREE LAYERS PER WALL — outer face sheet / core / inner face
+sheet. (The first implementation delivered only an outer face and a
+half-thickness core: it chose its offsets to make the TOTAL two-wall
+consumption equal the P0 `stack_mm` formula, which silently deleted the inner
+face sheet. Caught by product review.) The correct chain is full-value:
 
-    face_sheet_IML = OML_wire.offset2D(-face_mm)         # consumes 2*face_mm
-    hollow_IML     = face_sheet_IML.offset2D(-core_mm/2)  # consumes 2*(core_mm/2) = core_mm
-    # total = 2*face_mm + core_mm == stack_mm, exactly
+    face_IML   = OML_wire.offset2D(-face_mm)      # outer face sheet, wall = face_mm
+    core_IML   = face_IML.offset2D(-core_mm)      # core, wall = core_mm
+    hollow_IML = core_IML.offset2D(-face_mm)      # inner face sheet, wall = face_mm
 
-Verified both analytically and empirically against te_half_twisted_moderate.yaml's
-real (tightest-margin, frozen-gate) numbers in the R0 probe.
+Per-wall consumption = face+core+face = `stack_mm`, exactly the FROZEN P0
+per-wall formula (`backend/schema/validators.py`); TOTAL local thickness
+consumed is `2*stack_mm`. Where a section is locally thinner than
+`2*stack_mm` (aft of ~x/c=0.9 at the tip on several frozen configs) the
+innermost offsets SELF-CLIP (`kind="intersection"`): the hollow locally
+vanishes and the walls merge into solid laminate — R0-verified to still
+produce one valid closed wire per station, valid lofts, shard-free rings and
+exact volume conservation (probe_ocp_offset_3layer.py). That aft wall-merge
+is a documented consequence of the corrected panel, to be revisited with
+ramped drop-offs (D11) and the P6 gate's IML audit.
 
-EVERY layer is restricted to the actual body: face sheet = body − face_IML
-(body-derived by construction), core = (face_IML − hollow_IML) ∩ body — the
-explicit ∩ body exists because the raw face_IML/hollow_IML band knows nothing
-about device cuts and would otherwise sail uncut through a control-surface
-pocket (a real defect caught visually in the dev viewer the first time the
-band was rendered without it).
+EVERY layer is restricted to the actual body: the outer face sheet =
+body − face_IML (body-derived by construction), core and inner face sheet get
+an explicit ∩ body — the raw loft-algebra bands know nothing about device
+cuts and would otherwise sail uncut through a control-surface pocket (a real
+defect caught visually in the dev viewer the first time the core band was
+rendered without it).
 
 UPPER/LOWER SPLIT: molded-composite reality is an upper and a lower mold
-half; the skin layers are therefore delivered as separate upper/lower shells
+half; every layer is therefore delivered as separate upper/lower shells
 (and later, separate upper/lower midsurfaces for the Ansys route). The split
 uses a "below-camber" prism: per station, the camber polyline — exact by
 midpointing paired placed points, since resample.py guarantees upper/lower
@@ -79,25 +87,29 @@ PARTING_FLOOR_DROP_CHORD_FRAC = 0.5
 
 @dataclass
 class SandwichLofts:
-    face_sheet_iml_solid: cq.Solid
-    hollow_iml_solid: cq.Solid
-    parting_solid: cq.Solid  # below-camber prism, shared by every body's split
+    face_iml_solid: cq.Solid    # inner boundary of the OUTER face sheet
+    core_iml_solid: cq.Solid    # inner boundary of the core
+    hollow_iml_solid: cq.Solid  # inner boundary of the INNER face sheet = cavity
+    parting_solid: cq.Solid     # below-camber prism, shared by every body's split
     timings_s: dict = field(default_factory=dict)
 
 
 @dataclass
 class SandwichBody:
-    """Per-body sandwich layers. face_sheet_shell/core_shell are the full
-    body-restricted rings (kept so a gate can assert the upper/lower pair
-    exactly partitions each ring); the four upper/lower shapes are the actual
-    deliverable (one skin per mold half, plan.md §8.9 / D5)."""
+    """Per-body sandwich layers, three per wall (outer face / core / inner
+    face). The three full rings are kept so a gate can assert each
+    upper/lower pair exactly partitions its ring; the six upper/lower shapes
+    are the actual deliverable (one skin per mold half, plan.md §8.9 / D5)."""
 
-    face_sheet_shell: cq.Shape
+    face_outer_shell: cq.Shape
     core_shell: cq.Shape
-    face_sheet_upper: cq.Shape
-    face_sheet_lower: cq.Shape
+    face_inner_shell: cq.Shape
+    face_outer_upper: cq.Shape
+    face_outer_lower: cq.Shape
     core_upper: cq.Shape
     core_lower: cq.Shape
+    face_inner_upper: cq.Shape
+    face_inner_lower: cq.Shape
     hollow_interior: cq.Shape | None  # None when skipped (include_hollow_interior=False)
     timings_s: dict = field(default_factory=dict)
 
@@ -152,27 +164,31 @@ def _parting_polygon(sec: PlacedSection) -> np.ndarray:
 
 
 def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> SandwichLofts:
-    """Per-station chained offset (face_mm, then core_mm/2 — see module
-    docstring) + ruled loft, over the FULL section list exactly as the OML
-    itself is lofted (loft.py's build_section_wire, same per-station points),
-    plus the below-camber parting prism for the upper/lower split — clean-span
-    construction, see module docstring for the device-region limitation."""
+    """Per-station chained full-value offset (face_mm, core_mm, face_mm — see
+    module docstring) + ruled loft, over the FULL section list exactly as the
+    OML itself is lofted (loft.py's build_section_wire, same per-station
+    points), plus the below-camber parting prism for the upper/lower split —
+    clean-span construction, see module docstring for the device-region
+    limitation."""
     face_mm = face_sheet_thickness_mm(config)
     core_mm = config.skin.core.thickness_mm
     timings: dict = {}
 
     t0 = time.perf_counter()
-    face_sheet_wires, hollow_wires = [], []
+    face_wires, core_wires, hollow_wires = [], [], []
     for sec in sections:
         outer_wire = build_section_wire(sec.points)
         face_wire = _offset_wire(outer_wire, face_mm)
-        hollow_wire = _offset_wire(face_wire, core_mm / 2.0)
-        face_sheet_wires.append(face_wire)
+        core_wire = _offset_wire(face_wire, core_mm)
+        hollow_wire = _offset_wire(core_wire, face_mm)
+        face_wires.append(face_wire)
+        core_wires.append(core_wire)
         hollow_wires.append(hollow_wire)
     timings["offset_wires_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    face_sheet_iml_solid = cq.Solid.makeLoft(face_sheet_wires, ruled=True)
+    face_iml_solid = cq.Solid.makeLoft(face_wires, ruled=True)
+    core_iml_solid = cq.Solid.makeLoft(core_wires, ruled=True)
     hollow_iml_solid = cq.Solid.makeLoft(hollow_wires, ruled=True)
     timings["lofts_s"] = time.perf_counter() - t0
 
@@ -182,7 +198,8 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     timings["parting_solid_s"] = time.perf_counter() - t0
 
     return SandwichLofts(
-        face_sheet_iml_solid=face_sheet_iml_solid,
+        face_iml_solid=face_iml_solid,
+        core_iml_solid=core_iml_solid,
         hollow_iml_solid=hollow_iml_solid,
         parting_solid=parting_solid,
         timings_s=timings,
@@ -193,40 +210,47 @@ def build_sandwich_body(
     body: cq.Shape, lofts: SandwichLofts, include_hollow_interior: bool = True
 ) -> SandwichBody:
     """Cuts the per-station lofts (built over the FULL original span) against
-    the ACTUAL device-cut body, then splits each ring into upper/lower shells
-    with the parting prism. Safe to call on either `wing` or
-    `control_surface` from a P4 TeCutResult, PROVIDED the region of interest
-    is away from the device's spanwise window (module docstring).
+    the ACTUAL device-cut body, then splits each of the three rings into
+    upper/lower shells with the parting prism. Safe to call on either `wing`
+    or `control_surface` from a P4 TeCutResult, PROVIDED the region of
+    interest is away from the device's spanwise window (module docstring).
 
     `include_hollow_interior=False` skips the body ∩ hollow_IML boolean —
-    measured as the single most expensive operation in this module (370s on
-    te_half_twisted_moderate, ~59% of the pre-split total; see
-    docs/known_issues.md) — for callers that only need the shells (e.g. the
-    dev viewer export). The P6 pipeline itself always needs it (ribs/spars
-    are built inside it), so it defaults to True."""
+    measured among the most expensive operations in this module (~370-670s
+    per boolean of this size on the workspace; see docs/known_issues.md) —
+    for callers that only need the shells (e.g. the dev viewer export). The
+    P6 pipeline itself always needs it (ribs/spars are built inside it), so
+    it defaults to True."""
     timings: dict = {}
 
     t0 = time.perf_counter()
-    face_sheet_shell = fuzzy_cut(body, lofts.face_sheet_iml_solid)
-    timings["face_sheet_cut_s"] = time.perf_counter() - t0
+    face_outer_shell = fuzzy_cut(body, lofts.face_iml_solid)
+    timings["face_outer_cut_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    core_band = fuzzy_cut(lofts.face_sheet_iml_solid, lofts.hollow_iml_solid)
-    timings["core_cut_s"] = time.perf_counter() - t0
-
-    t0 = time.perf_counter()
+    core_band = fuzzy_cut(lofts.face_iml_solid, lofts.core_iml_solid)
     core_shell = fuzzy_common(core_band, body)
-    timings["core_body_common_s"] = time.perf_counter() - t0
+    timings["core_ring_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    face_sheet_lower = fuzzy_common(face_sheet_shell, lofts.parting_solid)
-    face_sheet_upper = fuzzy_cut(face_sheet_shell, lofts.parting_solid)
-    timings["face_split_s"] = time.perf_counter() - t0
+    face_inner_band = fuzzy_cut(lofts.core_iml_solid, lofts.hollow_iml_solid)
+    face_inner_shell = fuzzy_common(face_inner_band, body)
+    timings["face_inner_ring_s"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    face_outer_lower = fuzzy_common(face_outer_shell, lofts.parting_solid)
+    face_outer_upper = fuzzy_cut(face_outer_shell, lofts.parting_solid)
+    timings["face_outer_split_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     core_lower = fuzzy_common(core_shell, lofts.parting_solid)
     core_upper = fuzzy_cut(core_shell, lofts.parting_solid)
     timings["core_split_s"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    face_inner_lower = fuzzy_common(face_inner_shell, lofts.parting_solid)
+    face_inner_upper = fuzzy_cut(face_inner_shell, lofts.parting_solid)
+    timings["face_inner_split_s"] = time.perf_counter() - t0
 
     hollow_interior = None
     if include_hollow_interior:
@@ -235,12 +259,15 @@ def build_sandwich_body(
         timings["hollow_common_s"] = time.perf_counter() - t0
 
     return SandwichBody(
-        face_sheet_shell=face_sheet_shell,
+        face_outer_shell=face_outer_shell,
         core_shell=core_shell,
-        face_sheet_upper=face_sheet_upper,
-        face_sheet_lower=face_sheet_lower,
+        face_inner_shell=face_inner_shell,
+        face_outer_upper=face_outer_upper,
+        face_outer_lower=face_outer_lower,
         core_upper=core_upper,
         core_lower=core_lower,
+        face_inner_upper=face_inner_upper,
+        face_inner_lower=face_inner_lower,
         hollow_interior=hollow_interior,
         timings_s=timings,
     )
