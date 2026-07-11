@@ -77,6 +77,21 @@ R+COVE_CLEARANCE_MM going outward — the CS nose sits INSIDE that radius), a
 mirror-image construction this function does not yet build; CS sandwich
 shells are not wired into any export/gate path yet (scripts/export_viewer_data.py
 still says so explicitly), so this is deferred, not forgotten.
+
+RAMPED DROP-OFFS (D11, `config.skin.ramp_ratio`): plan.md §8.7 lists 4 ramp
+locations — edges, hinge lands, joints, every hardpoint. Only "edges" (the
+wingtip) is buildable right now; the other 3 need geometry this tool doesn't
+have yet (hinge attachment points arrive with P7, joints with P11, hardware
+pockets with P8) — deferred, not silent, same pattern as the CS-nose limit
+above. `build_sandwich_lofts` makes `core_mm` a PER-STATION value via
+`_ramped_core_mm`: nominal everywhere except within `ramp_ratio*core_mm` of
+the tip station, where it tapers linearly to (near) zero — `face_mm` is
+UNCHANGED, so the panel becomes solid laminate (face+face, no core) right at
+the tip, exactly D11's wording. The root (y=0) is the mirror-continuous
+centerline in current half-span R1 scope, not a free edge — not ramped.
+This changes ONLY the per-station offset inputs, upstream of everything
+else in this module (cove-fidelity cut, body-restriction, upper/lower
+split) — no other construction step needed to change.
 """
 from __future__ import annotations
 
@@ -103,6 +118,11 @@ PARTING_EXTENSION_CHORD_FRAC = 0.05
 # chord). Anything comfortably below the lowest skin point works; 0.5 chord
 # is unambiguous at any twist this tool accepts.
 PARTING_FLOOR_DROP_CHORD_FRAC = 0.5
+# Construction floor for the ramped core offset (D11) — not a physical
+# tolerance, just avoids a literal zero-distance offset2D call at the tip
+# station itself (unverified edge case of an otherwise R0-probed API).
+# Negligible next to any real core_mm; same role as PARTING_EXTENSION_CHORD_FRAC.
+RAMP_MIN_CORE_MM = 0.01
 
 
 @dataclass
@@ -140,6 +160,22 @@ class SandwichBody:
 def _offset_wire(wire: cq.Wire, distance_mm: float) -> cq.Wire:
     result = wire.offset2D(-distance_mm, kind="intersection")
     return result[0] if isinstance(result, list) else result
+
+
+def _ramped_core_mm(y_mm: float, nominal_core_mm: float, ramp_ratio: float, y_tip_mm: float) -> float:
+    """D11: taper core thickness to (near) zero within `ramp_ratio*nominal_core_mm`
+    of the wingtip station, so the sandwich panel becomes solid laminate
+    (face+face, no core — `face_mm` is untouched by this) at a free edge
+    instead of terminating in an exposed foam core. Linear ramp; floored at
+    RAMP_MIN_CORE_MM (module docstring) to keep the offset distance from
+    ever hitting exactly zero. Root (y=0) is not ramped — see module
+    docstring."""
+    ramp_len_mm = ramp_ratio * nominal_core_mm
+    dist_to_tip_mm = y_tip_mm - y_mm
+    if dist_to_tip_mm >= ramp_len_mm:
+        return nominal_core_mm
+    frac = max(0.0, dist_to_tip_mm / ramp_len_mm)
+    return max(RAMP_MIN_CORE_MM, nominal_core_mm * frac)
 
 
 def face_sheet_thickness_mm(config: Config) -> float:
@@ -191,19 +227,27 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     module docstring) + ruled loft, over the FULL section list exactly as the
     OML itself is lofted (loft.py's build_section_wire, same per-station
     points), plus the below-camber parting prism for the upper/lower split.
-    When `config.te_surface` is enabled, each loft is then cove-fidelity-
-    corrected for the wing body (module docstring) — the control-surface
-    scope limit still applies."""
+    `core_mm` is per-station (D11 ramped drop-off at the tip — module
+    docstring, `_ramped_core_mm`); `face_mm` is constant. When
+    `config.te_surface` is enabled, each loft is then cove-fidelity-corrected
+    for the wing body (module docstring) — that wedge is sized off the
+    NOMINAL core_mm, not the ramped value, so a device window whose outboard
+    edge falls inside the tip's ramp zone is an untested interaction (both
+    are edge-case corrections; not expected to overlap on any current config,
+    not yet verified if it does)."""
     face_mm = face_sheet_thickness_mm(config)
     core_mm = config.skin.core.thickness_mm
+    ramp_ratio = config.skin.ramp_ratio
+    y_tip_mm = max(sec.y_mm for sec in sections)
     timings: dict = {}
 
     t0 = time.perf_counter()
     face_wires, core_wires, hollow_wires = [], [], []
     for sec in sections:
         outer_wire = build_section_wire(sec.points)
+        local_core_mm = _ramped_core_mm(sec.y_mm, core_mm, ramp_ratio, y_tip_mm)
         face_wire = _offset_wire(outer_wire, face_mm)
-        core_wire = _offset_wire(face_wire, core_mm)
+        core_wire = _offset_wire(face_wire, local_core_mm)
         hollow_wire = _offset_wire(core_wire, face_mm)
         face_wires.append(face_wire)
         core_wires.append(core_wire)
