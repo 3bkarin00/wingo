@@ -544,3 +544,35 @@ meaningful change: what changed, why, and what it retired/added.
   wingo.coder workspace container restarted mid-session and lost its
   apt-installed native libs (libGL etc.) — reapplied the documented
   workaround (docs/known_issues.md), not a code problem.
+
+## 2026-07-11 — P6: fix ramp regression on high_taper.yaml (2 real bugs)
+
+- Testing the ramp against `tests/configs/edge/high_taper.yaml` (10:1
+  taper, `mirror:true`, single-ply thin layers — an explicit
+  self-intersection stress-test config) crashed `build_sandwich_body` with
+  `BRepAlgoAPI_Cut failed`. Confirmed by isolation (swapping in the
+  pre-ramp `iml.py` via git) that this was a real regression from the ramp
+  work, not a pre-existing bug.
+- Bug 1: `RAMP_MIN_CORE_MM=0.01` accidentally equaled `KERNEL_TOLERANCE_MM`
+  exactly — the tip's core layer was floored to the kernel's own precision
+  limit. Moved to `backend/tolerances.py` as `RAMP_MIN_CORE_MM = 0.1` (10x
+  margin, same reasoning as `FALSE_SPAR_COVE_STANDOFF_MM`). Reduced but did
+  not fully fix the crash.
+- Bug 2 (the real cause): `parting_solid` stayed on the ORIGINAL
+  (unexpanded) station list while the face/core/hollow lofts moved to
+  `ramp_sections` (the ramp-boundary station `_insert_ramp_station` adds) —
+  a topology mismatch between two lofts boolean'd against each other.
+  `parting_solid` now built from `ramp_sections` too. Full derivation,
+  including the step-by-step validity trace that found it, in
+  docs/r0_findings/p06.md's new addendum.
+- Re-verified against the real kernel: `high_taper.yaml`'s full
+  `build_sandwich_lofts`/`build_sandwich_body` chain now succeeds
+  end-to-end (every intermediate valid/watertight/single-solid, partition
+  sums correctly); `te_half.yaml` re-verified unaffected (this touches
+  shared code every config goes through).
+- Lesson recorded for future construction work in this module: any new
+  per-station correction that adds/removes stations from one loft feeding
+  `build_sandwich_body`'s boolean chain must propagate that same station
+  list to every other loft boolean'd against it — a mismatch passes every
+  per-shape `isValid()` check and only fails (or silently produces wrong
+  geometry) on a sufficiently extreme config.

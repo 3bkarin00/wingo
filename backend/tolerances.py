@@ -179,6 +179,20 @@ OVERLAP_MARGIN_DEG = 4.0
 # (hinge_xc 0.70-0.75, chords 190-420 mm).
 FALSE_SPAR_COVE_STANDOFF_MM = 0.5
 
+# Ramped core drop-off (D11, plan.md §8.7) floor: the per-station core_mm
+# tapers toward zero within ramp_ratio*core_mm of the wingtip
+# (backend/geometry/iml.py's _ramped_core_mm) but is floored here rather
+# than let the offset distance hit exactly zero. 0.1mm = 10x
+# KERNEL_TOLERANCE_MM. NOT an arbitrary "small number": a first attempt
+# used 0.01mm (== KERNEL_TOLERANCE_MM exactly) and it broke real-kernel
+# booleans on tests/configs/edge/high_taper.yaml — a razor-thin core layer
+# right at the kernel's own precision floor made BRepAlgoAPI_Cut fail
+# outright at the default fuzzy value and produce dozens of degenerate
+# micro-fragments at larger ones (docs/r0_findings/p06.md). 0.1mm keeps a
+# comfortable margin above kernel fuzz while staying negligible next to any
+# config's real core.thickness_mm (0.5mm-3.0mm across current test configs).
+RAMP_MIN_CORE_MM = 0.1
+
 # Sampling-grid tolerance for the "cove clearance is exactly COVE_CLEARANCE_MM
 # everywhere" gate check — absorbs per-station loft interpolation between
 # sampled cross-sections, not just kernel fuzz. Matches FACE_TANGENCY_TOLERANCE_MM

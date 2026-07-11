@@ -102,11 +102,20 @@ tests/configs/devices/te_half.yaml, an order of magnitude more than a
 tip-only ramp should ever remove — see docs/r0_findings/p06.md).
 `_insert_ramp_station` fixes this by inserting one extra station AT the
 ramp boundary (y_tip − ramp_len_mm) into a LOCAL COPY of the section list
-used only for this module's offset/loft construction — built via the SAME
-`interp_station`+`place_section` pipeline `build_planform_sections` itself
-uses, so it's geometrically identical to what a declared station there
-would have produced. The OML/parting-prism lofts keep using the original,
-unmodified `sections` list — this insertion is sandwich-construction-local.
+used for this module's offset/loft AND parting-prism construction — built
+via the SAME `interp_station`+`place_section` pipeline
+`build_planform_sections` itself uses, so it's geometrically identical to
+what a declared station there would have produced. The parting prism MUST
+use this same expanded list, not the original: a first attempt kept
+`parting_solid` on the original (unexpanded) `sections` while
+`face_inner_shell` etc. used the ramp-expanded lofts, and that topology
+MISMATCH between the shape being cut and the cutting tool broke
+`BRepAlgoAPI_Cut` outright on `tests/configs/edge/high_taper.yaml`'s
+extreme 10:1-taper + single-ply-face + thin-core combination — every loft
+that gets boolean'd against another must share the same per-station Y
+sampling (see docs/r0_findings/p06.md). The OML loft (built earlier, in
+loft.py, from the original `sections`) is the one exception — the OML is
+untouched by ramping and stays on its original station set.
 """
 from __future__ import annotations
 
@@ -139,11 +148,6 @@ PARTING_EXTENSION_CHORD_FRAC = 0.05
 # chord). Anything comfortably below the lowest skin point works; 0.5 chord
 # is unambiguous at any twist this tool accepts.
 PARTING_FLOOR_DROP_CHORD_FRAC = 0.5
-# Construction floor for the ramped core offset (D11) — not a physical
-# tolerance, just avoids a literal zero-distance offset2D call at the tip
-# station itself (unverified edge case of an otherwise R0-probed API).
-# Negligible next to any real core_mm; same role as PARTING_EXTENSION_CHORD_FRAC.
-RAMP_MIN_CORE_MM = 0.01
 
 
 @dataclass
@@ -188,15 +192,18 @@ def _ramped_core_mm(y_mm: float, nominal_core_mm: float, ramp_ratio: float, y_ti
     of the wingtip station, so the sandwich panel becomes solid laminate
     (face+face, no core — `face_mm` is untouched by this) at a free edge
     instead of terminating in an exposed foam core. Linear ramp; floored at
-    RAMP_MIN_CORE_MM (module docstring) to keep the offset distance from
-    ever hitting exactly zero. Root (y=0) is not ramped — see module
-    docstring."""
+    `tolerances.RAMP_MIN_CORE_MM` — NOT just to dodge a literal
+    zero-distance offset2D call, but because a first attempt at 0.01mm
+    (== KERNEL_TOLERANCE_MM exactly) broke real-kernel booleans on
+    tests/configs/edge/high_taper.yaml (see that constant's derivation
+    comment and docs/r0_findings/p06.md). Root (y=0) is not ramped — see
+    module docstring."""
     ramp_len_mm = ramp_ratio * nominal_core_mm
     dist_to_tip_mm = y_tip_mm - y_mm
     if dist_to_tip_mm >= ramp_len_mm:
         return nominal_core_mm
     frac = max(0.0, dist_to_tip_mm / ramp_len_mm)
-    return max(RAMP_MIN_CORE_MM, nominal_core_mm * frac)
+    return max(tolerances.RAMP_MIN_CORE_MM, nominal_core_mm * frac)
 
 
 def _insert_ramp_station(
@@ -210,8 +217,9 @@ def _insert_ramp_station(
     Built via the same interp_station+place_section pipeline
     build_planform_sections uses, so it's geometrically identical to what a
     declared station there would produce. Returns a NEW list; `sections`
-    itself is untouched (OML/parting-prism construction must keep using the
-    original station set)."""
+    itself is untouched (the OML, built earlier from the original list, is
+    unaffected by ramping — but the parting prism DOES need this expanded
+    list too, see module docstring)."""
     ordered = sorted(sections, key=lambda s: s.y_mm)
     y_tip_mm = ordered[-1].y_mm
     y_ramp_mm = y_tip_mm - ramp_len_mm
@@ -334,7 +342,13 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
         timings["cove_fidelity_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    parting_wires = [build_section_wire(_parting_polygon(sec)) for sec in sections]
+    # ramp_sections, not sections: parting_solid gets cut against face/core/
+    # hollow downstream (build_sandwich_body) — if it's lofted from a
+    # DIFFERENT per-station Y-sampling than they are, that topology mismatch
+    # broke BRepAlgoAPI_Cut outright on tests/configs/edge/high_taper.yaml's
+    # extreme taper+thin-layer combination (docs/r0_findings/p06.md);
+    # keeping every loft on the same station set fixed it.
+    parting_wires = [build_section_wire(_parting_polygon(sec)) for sec in ramp_sections]
     parting_solid = cq.Solid.makeLoft(parting_wires, ruled=True)
     timings["parting_solid_s"] = time.perf_counter() - t0
 
