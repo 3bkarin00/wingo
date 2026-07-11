@@ -89,9 +89,24 @@ the tip station, where it tapers linearly to (near) zero — `face_mm` is
 UNCHANGED, so the panel becomes solid laminate (face+face, no core) right at
 the tip, exactly D11's wording. The root (y=0) is the mirror-continuous
 centerline in current half-span R1 scope, not a free edge — not ramped.
-This changes ONLY the per-station offset inputs, upstream of everything
-else in this module (cove-fidelity cut, body-restriction, upper/lower
-split) — no other construction step needed to change.
+
+A per-station core_mm value alone is NOT sufficient: `cq.Solid.makeLoft(...,
+ruled=True)` linearly blends the 2D offset WIRE between consecutive input
+stations, so if the nearest declared planform station outboard of the ramp
+zone is farther than `ramp_ratio*core_mm` from the tip (the common case —
+e.g. a config with only root+tip stations, span in the hundreds of mm, ramp
+zone a few mm), the loft smears the taper across that ENTIRE gap instead of
+confining it near the tip (caught empirically: a first attempt using the
+UNMODIFIED planform station list dropped core_ring volume ~43% on
+tests/configs/devices/te_half.yaml, an order of magnitude more than a
+tip-only ramp should ever remove — see docs/r0_findings/p06.md).
+`_insert_ramp_station` fixes this by inserting one extra station AT the
+ramp boundary (y_tip − ramp_len_mm) into a LOCAL COPY of the section list
+used only for this module's offset/loft construction — built via the SAME
+`interp_station`+`place_section` pipeline `build_planform_sections` itself
+uses, so it's geometrically identical to what a declared station there
+would have produced. The OML/parting-prism lofts keep using the original,
+unmodified `sections` list — this insertion is sandwich-construction-local.
 """
 from __future__ import annotations
 
@@ -104,7 +119,13 @@ import numpy as np
 from backend import tolerances
 from backend.geometry.booleans import fuzzy_common, fuzzy_cut
 from backend.geometry.loft import build_section_wire
-from backend.geometry.sections import PlacedSection
+from backend.geometry.sections import (
+    PlacedSection,
+    interp_station,
+    le_and_z_offset,
+    place_section,
+    unit_chord_area,
+)
 from backend.geometry.te_cut import build_cove_offset_region
 from backend.schema.models import Config
 
@@ -178,6 +199,45 @@ def _ramped_core_mm(y_mm: float, nominal_core_mm: float, ramp_ratio: float, y_ti
     return max(RAMP_MIN_CORE_MM, nominal_core_mm * frac)
 
 
+def _insert_ramp_station(
+    config: Config, sections: list[PlacedSection], ramp_len_mm: float
+) -> list[PlacedSection]:
+    """Insert one extra station AT the ramp boundary (y_tip − ramp_len_mm) so
+    the ruled loft's per-station core_mm blend is confined to the ramp zone
+    instead of smearing across the gap to the nearest declared planform
+    station (module docstring — this is the fix for the ~43% core_ring
+    volume defect that construction produced before this function existed).
+    Built via the same interp_station+place_section pipeline
+    build_planform_sections uses, so it's geometrically identical to what a
+    declared station there would produce. Returns a NEW list; `sections`
+    itself is untouched (OML/parting-prism construction must keep using the
+    original station set)."""
+    ordered = sorted(sections, key=lambda s: s.y_mm)
+    y_tip_mm = ordered[-1].y_mm
+    y_ramp_mm = y_tip_mm - ramp_len_mm
+    # Skip if the ramp boundary coincides with an existing station (avoids a
+    # near-zero-length loft segment) or falls at/before the first station
+    # (ramp_len_mm >= full span — not this project's expected regime).
+    if y_ramp_mm <= ordered[0].y_mm or any(abs(s.y_mm - y_ramp_mm) < 1.0 for s in ordered):
+        return ordered
+
+    half_span_mm = y_tip_mm
+    y_frac = y_ramp_mm / half_span_mm
+    resample_points = config.airfoils.resample_points
+    chord, twist, pts = interp_station(config, y_frac, resample_points, config.airfoils.te_min_thickness_mm)
+    le_x, z_base = le_and_z_offset(config, y_frac, half_span_mm)
+    placed = place_section(
+        pts, chord, twist, config.planform.twist_axis_xc,
+        y_mm=y_ramp_mm, le_x_mm=le_x, z_base_mm=z_base,
+    )
+    new_sec = PlacedSection(y_ramp_mm, y_frac, chord, twist, placed, unit_chord_area(pts))
+
+    result = list(ordered)
+    idx = next(i for i, s in enumerate(result) if s.y_mm > y_ramp_mm)
+    result.insert(idx, new_sec)
+    return result
+
+
 def face_sheet_thickness_mm(config: Config) -> float:
     """Face-sheet stack thickness (mm) — same provisional ply-thickness
     lookup already used inline by backend/schema/validators.py and
@@ -238,12 +298,14 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     face_mm = face_sheet_thickness_mm(config)
     core_mm = config.skin.core.thickness_mm
     ramp_ratio = config.skin.ramp_ratio
-    y_tip_mm = max(sec.y_mm for sec in sections)
+    ramp_len_mm = ramp_ratio * core_mm
+    ramp_sections = _insert_ramp_station(config, sections, ramp_len_mm)
+    y_tip_mm = ramp_sections[-1].y_mm
     timings: dict = {}
 
     t0 = time.perf_counter()
     face_wires, core_wires, hollow_wires = [], [], []
-    for sec in sections:
+    for sec in ramp_sections:
         outer_wire = build_section_wire(sec.points)
         local_core_mm = _ramped_core_mm(sec.y_mm, core_mm, ramp_ratio, y_tip_mm)
         face_wire = _offset_wire(outer_wire, face_mm)

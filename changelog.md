@@ -510,3 +510,37 @@ meaningful change: what changed, why, and what it retired/added.
   export/gate path yet.
 - Regenerated `tools/viewer/dist/viewer.html` + `artifacts/viewer_data.json`
   from this run for visual verification (both gitignored, not committed).
+
+## 2026-07-11 — P6: ramped drop-offs (D11, wingtip edge)
+
+- `config.skin.ramp_ratio` (schema field since P0, unused until now) is
+  consumed: `iml.build_sandwich_lofts` makes `core_mm` per-station
+  (`_ramped_core_mm`), tapering to near-zero within `ramp_ratio*core_mm` of
+  the wingtip so the panel becomes solid laminate (face+face, no core) at
+  the free edge instead of an exposed foam core. `face_mm` unchanged.
+- **First attempt was wrong** — a per-station `core_mm` alone isn't
+  sufficient because `makeLoft(ruled=True)` linearly blends the offset wire
+  between whatever INPUT stations exist; `te_half.yaml`'s sparse 2-station
+  planform (root+tip, 1200mm span) meant the "9mm ramp" actually smeared
+  across the full span. Caught by sanity-checking the verified run's
+  `core_ring` volume against the config's own numbers (dropped ~43%, an
+  order of magnitude too much for a tip-only taper) rather than trusting
+  "watertight + shard-free + partitioned" as sufficient — those asserts
+  catch an invalid construction, not a valid-but-wrong one. Full derivation
+  in docs/r0_findings/p06.md's new addendum.
+- Fix: `iml._insert_ramp_station` pins the ramp boundary with an extra
+  station (built via the same `interp_station`+`place_section` pipeline
+  `build_planform_sections` uses), inserted into a local copy of the
+  section list used only for the face/core/hollow offset construction — the
+  OML and parting-prism lofts keep using the original, unmodified list.
+- Re-verified against the real kernel (`tests/configs/devices/te_half.yaml`,
+  wingo.coder): `core_ring` now 2322667.5 mm³ (~0.33% below the pre-ramp
+  baseline, consistent with a 9mm-of-1200mm taper); sandwich still
+  watertight/partitioned/shard-free; false spar unaffected.
+- Deferred (plan.md §8.7's other 3 ramp locations): hinge-land ramping
+  needs P7's hinge attachment points; joint ramping needs P11's joint
+  definitions; hardpoint ramping needs P8's hardware pockets.
+- Also recovered from an unrelated environment issue this session: the
+  wingo.coder workspace container restarted mid-session and lost its
+  apt-installed native libs (libGL etc.) — reapplied the documented
+  workaround (docs/known_issues.md), not a code problem.
