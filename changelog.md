@@ -449,3 +449,31 @@ meaningful change: what changed, why, and what it retired/added.
   (outer faces violet, cores pink, inner faces teal).
 - docs/r0_findings/p06.md: old derivation marked SUPERSEDED in place +
   full correction addendum.
+
+## 2026-07-11 — P6: false-spar closing wall for the TE device cut
+
+- `backend/geometry/false_spar.py` (new): closes the sandwich cavity at the
+  device cut, per plan.md §8.5/§8.7's "false spars close device cut faces"
+  step. Per station along the hinge axis (extended `gap_mm` past the device
+  window on each side so the wall ties into the clean-span cavity): a flat
+  wall prism standing off `FALSE_SPAR_COVE_STANDOFF_MM` forward of the cove
+  sweep radius (`r_cove = StationFeet.R + COVE_CLEARANCE_MM`), one skin-stack
+  thick (`2*face_mm + core_mm`), intersected with the hollow-IML loft (not
+  the actual wing body — forward of the cove sweep `hollow_iml_solid ⊆ wing`,
+  so this is a cheap loft∩loft boolean giving the same solid). No new
+  third-party boundary (same probed wire/loft/fuzzy-boolean route as
+  `iml.py`), so no new R0 probe — construction intent was already recorded
+  in r0_findings/p06.md prior to this implementation.
+- Verified against the real kernel on `tests/configs/devices/te_half.yaml`
+  (wingo.coder): zero shards, watertight, spans the device window, CS
+  clearance 5.50mm ≥ `COVE_CLEARANCE_MM`. New-code cost 12.6s. NOT yet run
+  against the 3 aft-hinge configs (te_half_twisted_moderate, devices_full,
+  high_taper) — see the KNOWN DESIGN TENSION note in false_spar.py's module
+  docstring (wall can land within a few mm of, or straddle, the rear spar's
+  plane there; deferred resolution is web-merging when spars are thickened
+  later in P6, not moving the wall).
+- New tolerance `FALSE_SPAR_COVE_STANDOFF_MM = 0.5` in `backend/tolerances.py`.
+- Wired into `scripts/export_viewer_data.py` (verified volume + CS-clearance
+  assert on every sandwich export) and `tools/viewer/app.js` (new "False
+  spar (P6 WIP)" layer, lime green). NO frozen gate, validator, or config
+  was changed.

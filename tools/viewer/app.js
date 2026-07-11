@@ -6,6 +6,7 @@
   var SANDWICH = 0xa78bfa; // OUTER face-sheet shells — distinct from structure/kinematic (P6 WIP)
   var SANDWICH_CORE = 0xf472b6; // core shells — distinct from face sheets AND the status red
   var SANDWICH_INNER = 0x2dd4bf; // INNER face-sheet shells — third layer of the panel
+  var FALSE_SPAR = 0xa3e635; // device-cut closing wall — distinct from KINEMATIC's amber
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -379,6 +380,7 @@
       layerRows.push(["sandwich_core_lower", "Lower core (P6 WIP)", SANDWICH_CORE]);
       layerRows.push(["sandwich_face_inner_upper", "Upper inner face (P6 WIP)", SANDWICH_INNER]);
       layerRows.push(["sandwich_face_inner_lower", "Lower inner face (P6 WIP)", SANDWICH_INNER]);
+      layerRows.push(["sandwich_false_spar", "False spar (P6 WIP)", FALSE_SPAR]);
     }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
@@ -513,7 +515,8 @@
        ["sandwich_core_upper", "wing_core_upper", SANDWICH_CORE, 0.75],
        ["sandwich_core_lower", "wing_core_lower", SANDWICH_CORE, 0.75],
        ["sandwich_face_inner_upper", "wing_face_inner_upper", SANDWICH_INNER, 0.85],
-       ["sandwich_face_inner_lower", "wing_face_inner_lower", SANDWICH_INNER, 0.85]].forEach(function (row) {
+       ["sandwich_face_inner_lower", "wing_face_inner_lower", SANDWICH_INNER, 0.85],
+       ["sandwich_false_spar", "wing_false_spar", FALSE_SPAR, 0.9]].forEach(function (row) {
         var mesh = indexedMesh(data.sandwich[row[1]], row[2], row[3]);
         root.add(mesh);
         layers[row[0]] = mesh;

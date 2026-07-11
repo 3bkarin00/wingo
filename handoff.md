@@ -1,4 +1,4 @@
-# Handoff — 2026-07-09
+# Handoff — 2026-07-11
 ## State
 - Release/Phase: R1 / P4 DONE + merged-ready (phase/p04 pushed, PR still
   needs opening manually — no `gh` CLI in this environment). LE droop
@@ -14,26 +14,42 @@
   the core band not being body-restricted). All three rings are
   body-restricted and split into upper/lower shells via a camber-line
   parting prism (provisional parting — P15/P16's real max-half-breadth
-  parting curve supersedes it for tooling). Verification asserts run inside
-  the viewer-export path itself on every export: zero shards, watertight,
-  upper+lower exactly partitions each of the 3 rings. See
-  docs/r0_findings/p06.md (SUPERSEDED marker + both addenda) for the full
-  derivation history.
+  parting curve supersedes it for tooling).
+- False-spar closing wall (`backend/geometry/false_spar.py`) implemented
+  and verified against the real kernel on `tests/configs/devices/te_half.yaml`
+  (2026-07-11, on wingo.coder): `wall_prism ∩ hollow_iml_solid`, no shards,
+  watertight, spans the device window, CS clearance 5.50mm ≥
+  `COVE_CLEARANCE_MM`. New-code cost is cheap (12.6s of the run's ~35min —
+  the rest is the pre-existing sandwich-shell booleans, `core_ring_s=653s`
+  / `face_inner_ring_s=706s`, consistent with the documented variance).
+  Wired into `scripts/export_viewer_data.py` (`vol["false_spar"]`,
+  `tess["wing_false_spar"]`) and `tools/viewer/app.js` (new WIP layer,
+  lime green `FALSE_SPAR`). New tolerance `FALSE_SPAR_COVE_STANDOFF_MM`
+  in `backend/tolerances.py`. Only tested on `te_half`; NOT yet run against
+  the aft-hinge configs (`te_half_twisted_moderate`, `devices_full`,
+  `high_taper`) where the KNOWN DESIGN TENSION note below applies.
+  Verification asserts run inside the viewer-export path itself on every
+  export: zero shards, watertight, upper+lower exactly partitions each of
+  the 3 rings, false-spar spans + CS clearance. See docs/r0_findings/p06.md
+  (SUPERSEDED marker + both addenda) for the full derivation history.
 ## Next single action
-- Continue P6: the device-region follow-on is the next concrete piece —
-  build the false-spar closing wall at the TE cut face + make the
-  sandwich construction correct in the nose/cove-arc region (currently
-  `iml.py` offsets the ORIGINAL uncut airfoil sections everywhere, which is
-  WRONG near the hinge — the wing/CS's actual boundary there is
-  `cove_profile.py`'s arc, not the airfoil skin; `iml.py`'s own module
-  docstring states this limitation explicitly). After that: ramped
-  drop-offs (`ramp_ratio`, station-varying `core_mm` — same offset
-  machinery, no new construction path needed per r0_findings/p06.md), ribs
-  (plane ∩ hollow volume, lightening-hole cutouts as 2D face ops before
-  thickening), spars trimmed to IML (thicken P3's existing ruled spar
-  surfaces), midsurface faces (built alongside solids, not extracted
-  later), then finally `tests/gates/test_p06_sandwich.py` + `make gate
-  PHASE=p06`.
+- Continue P6: the nose/cove-arc region sandwich fidelity is the next
+  concrete piece (currently `iml.py` offsets the ORIGINAL uncut airfoil
+  sections everywhere, which is WRONG near the hinge — the wing/CS's actual
+  boundary there is `cove_profile.py`'s arc, not the airfoil skin; `iml.py`'s
+  own module docstring states this limitation explicitly). Before that,
+  optionally run the false-spar export against the 3 aft-hinge configs
+  (`te_half_twisted_moderate`, `devices_full`, `high_taper` — ~30-40min each
+  on wingo.coder) to confirm the KNOWN DESIGN TENSION note in
+  `false_spar.py` (wall landing near/straddling the rear spar plane) doesn't
+  actually break the CS-clearance or watertight asserts there. After the
+  cove-arc fix: ramped drop-offs (`ramp_ratio`, station-varying `core_mm` —
+  same offset machinery, no new construction path needed per
+  r0_findings/p06.md), ribs (plane ∩ hollow volume, lightening-hole cutouts
+  as 2D face ops before thickening), spars trimmed to IML (thicken P3's
+  existing ruled spar surfaces), midsurface faces (built alongside solids,
+  not extracted later), then finally `tests/gates/test_p06_sandwich.py` +
+  `make gate PHASE=p06`.
 ## Blockers / open questions
 - None technical. SSH push works; PRs merged by user in UI (no `gh` CLI).
 - wingo.coder's workspace agent can drop connection and/or lose the
@@ -46,11 +62,10 @@
 ## Deferred scope (explicit, not forgotten)
 - LE droop is DROPPED (ADR-004), not deferred — don't resurrect without a
   new explicit product decision.
-- Within P6, explicitly NOT done yet (tracked in the plan approved this
-  session, `/Users/salah/.claude/plans/eager-stargazing-lightning.md`, and
-  above): device-region (nose/cove-arc) sandwich fidelity + false spar;
-  ramped drop-offs; ribs; spar-trim-to-IML; midsurfaces; the real P6 gate
-  test file and `make gate PHASE=p06` run.
+- Within P6, explicitly NOT done yet: device-region (nose/cove-arc) sandwich
+  fidelity (false spar itself is DONE — see State above); ramped drop-offs;
+  ribs; spar-trim-to-IML; midsurfaces; the real P6 gate test file and
+  `make gate PHASE=p06` run.
 ## Do not touch
 - P0–P4 gates are frozen contracts (docs/gate_changes.md: one entry, for
   the P3 le_droop-reference removal).

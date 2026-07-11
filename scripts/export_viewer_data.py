@@ -172,6 +172,37 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     print(f"    sandwich verified: volumes(mm^3)={ {k: round(v, 1) for k, v in vol.items()} } "
           f"(3-ring partition + watertight + no shards)", flush=True)
 
+    # False spar (device-cut closing wall, backend/geometry/false_spar.py) —
+    # verified in-run like the shells: no shards, watertight, spans the
+    # device window, and clears the moving control surface by at least the
+    # cove clearance (its aft face sits at r_cove + standoff from the hinge
+    # axis while the CS nose stays within R < r_cove by construction).
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+
+    from backend.geometry.false_spar import build_false_spar
+    from backend.geometry.te_cut import hinge_frame as _hinge_frame
+
+    fs = build_false_spar(config, sections, lofts.hollow_iml_solid)
+    print(f"    false spar timings: {fs.timings_s}", flush=True)
+    vol["false_spar"] = _checked_volume("false_spar", fs.solid)
+
+    p0_fs, p1_fs, _, _, _, _ = _hinge_frame(config)
+    bb = fs.solid.BoundingBox()
+    y_lo, y_hi = min(p0_fs[1], p1_fs[1]), max(p0_fs[1], p1_fs[1])
+    assert bb.ymin <= y_lo + 1.0 and bb.ymax >= y_hi - 1.0, (
+        f"false spar does not span the device window: bbox y=[{bb.ymin:.1f}, {bb.ymax:.1f}] "
+        f"vs hinge axis y=[{y_lo:.1f}, {y_hi:.1f}]"
+    )
+    dist_op = BRepExtrema_DistShapeShape(fs.solid.wrapped, res.control_surface.wrapped)
+    dist_op.Perform()
+    cs_clearance = dist_op.Value()
+    assert cs_clearance >= tolerances.COVE_CLEARANCE_MM, (
+        f"false spar too close to control surface: {cs_clearance:.2f} mm < "
+        f"{tolerances.COVE_CLEARANCE_MM} mm cove clearance"
+    )
+    print(f"    false spar verified: vol={vol['false_spar']:.1f} mm^3, "
+          f"thickness={fs.thickness_mm:.2f} mm, CS clearance={cs_clearance:.2f} mm", flush=True)
+
     t0 = time.perf_counter()
     tess = {
         "wing_face_outer_upper": _tessellate(wing_sw.face_outer_upper),
@@ -180,6 +211,7 @@ def _sandwich_export(config: Config, sections, res) -> dict:
         "wing_core_lower": _tessellate(wing_sw.core_lower),
         "wing_face_inner_upper": _tessellate(wing_sw.face_inner_upper),
         "wing_face_inner_lower": _tessellate(wing_sw.face_inner_lower),
+        "wing_false_spar": _tessellate(fs.solid),
     }
     print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
           f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
@@ -344,7 +376,8 @@ def main() -> int:
                 len(d["sandwich"][k]["triangles"])
                 for k in ("wing_face_outer_upper", "wing_face_outer_lower",
                           "wing_core_upper", "wing_core_lower",
-                          "wing_face_inner_upper", "wing_face_inner_lower")
+                          "wing_face_inner_upper", "wing_face_inner_lower",
+                          "wing_false_spar")
             )
         print(f"  {stem}: {n_tris} triangles, {len(d['rib_planes'])} rib planes, "
               f"{len(d['hinge_axes'])} hinge axes, {len(d['hardpoints'])} hardpoints, "

@@ -168,6 +168,17 @@ NOSE_TANGENCY_MAX_DEG = 2.0
 # design margin, not fit to observed geometry.
 OVERLAP_MARGIN_DEG = 4.0
 
+# False-spar (device-cut closing wall, plan.md §8.5/§8.7) standoff between
+# the wall's AFT face and the wing cove's forwardmost sweep (r_cove =
+# StationFeet.R + COVE_CLEARANCE_MM at each station). Keeps the wall
+# strictly clear of the cove cut surface so the wall ∩ cavity boolean never
+# sees a tangent/coincident face pair (F4) and the wall never encroaches on
+# the cove clearance band the CS nose sweeps through. 0.5 mm = 50x
+# KERNEL_TOLERANCE_MM (comfortably above kernel fuzz) while staying a small
+# fraction of the ~10-15 mm cove radii of realistic aft-hinge configs
+# (hinge_xc 0.70-0.75, chords 190-420 mm).
+FALSE_SPAR_COVE_STANDOFF_MM = 0.5
+
 # Sampling-grid tolerance for the "cove clearance is exactly COVE_CLEARANCE_MM
 # everywhere" gate check — absorbs per-station loft interpolation between
 # sampled cross-sections, not just kernel fuzz. Matches FACE_TANGENCY_TOLERANCE_MM
