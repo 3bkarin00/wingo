@@ -243,14 +243,20 @@ def build_nose_arc_points(
 def build_cove_arc_points(
     feet: StationFeet, a: np.ndarray, u: np.ndarray,
     max_deflection_deg: float, overlap_margin_deg: float = tolerances.OVERLAP_MARGIN_DEG,
-    n: int = 48,
+    n: int = 48, extra_radius_mm: float = 0.0,
 ) -> np.ndarray:
     """Wing-cove forward contour (open polyline, 3D): a single concave arc
     centered on the SAME C, radius R + COVE_CLEARANCE_MM (never tangent to
     the nose — see tolerances.py), swept over the SAME extended angular
     range as the nose arc so the cove fully contains it at every deflection
-    angle up to max_deflection_deg (anti-unporting, ADR-003 addendum A)."""
-    r_cove = feet.R + tolerances.COVE_CLEARANCE_MM
+    angle up to max_deflection_deg (anti-unporting, ADR-003 addendum A).
+
+    `extra_radius_mm` grows the arc CONCENTRICALLY (same C, same angular
+    sweep) — used by backend/geometry/te_cut.py's `build_cove_offset_region`
+    to build the cove-following sandwich-layer boundaries iml.py needs
+    inside the device window (0.0 = the true cove surface itself, the
+    default every existing call site relies on)."""
+    r_cove = feet.R + tolerances.COVE_CLEARANCE_MM + extra_radius_mm
     extension = _overlap_extension_rad(max_deflection_deg, overlap_margin_deg)
     angles = _forward_sweep_angles(feet.angle_l, feet.angle_u, n, extension)
     local = r_cove * np.column_stack([np.cos(angles), np.sin(angles)])

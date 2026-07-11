@@ -225,6 +225,38 @@ def build_station_profiles(config: Config, sections: list) -> tuple[list, list, 
     return feet_full, feet_inset, nose_polys, cove_polys
 
 
+def build_cove_offset_region(
+    config: Config, sections: list, extra_radius_mm: float
+) -> cq.Solid:
+    """Loft of the wing-cove arc grown OUTWARD (into material) by
+    `extra_radius_mm` from the true cove surface — the EXACT same per-station
+    construction used to cut `cove_region` into the real wing (same
+    N_STATIONS, same full [0, axis_len] span, same feet/tangency machinery),
+    just at a larger concentric radius. Subtracting this from one of
+    iml.py's per-station offset lofts (built from the ORIGINAL uncut
+    airfoil, see that module's docstring) carves the matching cove-following
+    notch into it, so `body − (offset loft − this)` gives a sandwich layer
+    of uniform thickness measured from the TRUE cut surface instead of the
+    plain airfoil skin — see iml.py's DELIBERATE SCOPE LIMIT note (now
+    resolved by this function) for the defect this fixes."""
+    te = config.te_surface
+    if te is None or not te.enabled:
+        raise ValueError("config has no enabled te_surface")
+    p0, p1, h, a, u, axis_len = hinge_frame(config)
+    max_defl = te.max_deflection_deg
+    overlap_margin = te.overlap_margin_deg if te.overlap_margin_deg is not None else tolerances.OVERLAP_MARGIN_DEG
+
+    fracs_full = np.linspace(0.0, 1.0, N_STATIONS)
+    polys = []
+    for frac in fracs_full:
+        C = _station_point(p0, h, frac * axis_len)
+        pts = analytic_section_points(sections, C, h)
+        feet = find_station_feet(pts, C, a, u)
+        arc = build_cove_arc_points(feet, a, u, max_defl, overlap_margin, extra_radius_mm=extra_radius_mm)
+        polys.append(_close_polygon(arc))
+    return _loft_region(polys)
+
+
 def _loft_region(polygons: list[np.ndarray]) -> cq.Solid:
     """Hard precondition (ADR-003 point 5, not just a gate test): every
     station profile going into a ruled loft must have IDENTICAL point count

@@ -50,14 +50,33 @@ tangent-face pairs (F4). This is a PROVISIONAL parting definition: the real
 mold parting curve (max half-breadth per station) arrives with P15/P16 mold
 machinery and supersedes the camber-based split for tooling purposes.
 
-DELIBERATE SCOPE LIMIT (tracked, not silent): the per-station offsets use the
-ORIGINAL airfoil sections. Near a TE device window the wing/CS's ACTUAL outer
-boundary is the cove/nose arc (backend/geometry/cove_profile.py), not the
-plain airfoil skin, so the sandwich layers in that spanwise band treat the
-cove lip as if the uncut airfoil were still present. Nose/cove-arc-based
-sandwich fidelity and the false-spar closing wall at the cut face are an
-explicit follow-on, not implemented here. Trust `build_sandwich_body`'s
-output only away from an enabled device's spanwise window.
+COVE-ARC FIDELITY (wing body only — see remaining scope limit below): the
+per-station offsets are still built by 2D-offsetting the ORIGINAL uncut
+airfoil sections (unchanged, above). Near an enabled te_surface's device
+window the wing's ACTUAL outer boundary there is the cove arc
+(backend/geometry/cove_profile.py, cut into `wing` by te_cut.py's
+`cove_region`), not the plain airfoil skin — so a raw offset of the uncut
+airfoil is either missing entirely or an uncontrolled sliver right where the
+cove lip needs a real face_mm/core_mm/face_mm stack (worked through in
+detail in docs/r0_findings/p06.md, "Addendum: cove-arc IML fidelity").
+`build_sandwich_lofts` fixes this the same way te_cut.py separates OML
+construction from the cove cut: it lofts the SAME per-station offset chain
+over the full uncut sections as before, then (only when te_surface is
+enabled) SUBTRACTS a cove-following wedge from each of the three lofts —
+`te_cut.build_cove_offset_region(config, sections, extra_radius_mm=d)`,
+the exact same station/arc construction `cove_region` itself uses, just
+grown concentrically by `d` (=face_mm, face_mm+core_mm, stack_mm for the
+face/core/hollow lofts respectively). Because it's a concentric-arc offset
+(not a 2D polygon `offset2D`), there is no self-clip/self-intersection risk
+this introduces — `fuzzy_cut` against `body` downstream clips it to whatever
+material actually exists, same as the plain clean-span case.
+
+REMAINING SCOPE LIMIT (tracked, not silent): this fixes the WING body only.
+The control surface's own nose is bounded by a CONVEX arc at radius R (not
+R+COVE_CLEARANCE_MM going outward — the CS nose sits INSIDE that radius), a
+mirror-image construction this function does not yet build; CS sandwich
+shells are not wired into any export/gate path yet (scripts/export_viewer_data.py
+still says so explicitly), so this is deferred, not forgotten.
 """
 from __future__ import annotations
 
@@ -71,6 +90,7 @@ from backend import tolerances
 from backend.geometry.booleans import fuzzy_common, fuzzy_cut
 from backend.geometry.loft import build_section_wire
 from backend.geometry.sections import PlacedSection
+from backend.geometry.te_cut import build_cove_offset_region
 from backend.schema.models import Config
 
 # Camber-line extension past LE/TE (fraction of local chord) so the parting
@@ -87,9 +107,12 @@ PARTING_FLOOR_DROP_CHORD_FRAC = 0.5
 
 @dataclass
 class SandwichLofts:
-    face_iml_solid: cq.Solid    # inner boundary of the OUTER face sheet
-    core_iml_solid: cq.Solid    # inner boundary of the core
-    hollow_iml_solid: cq.Solid  # inner boundary of the INNER face sheet = cavity
+    # cq.Shape not cq.Solid: when an enabled te_surface triggers the
+    # cove-fidelity cut (module docstring), these three are fuzzy_cut
+    # results, which may be compounds.
+    face_iml_solid: cq.Shape    # inner boundary of the OUTER face sheet
+    core_iml_solid: cq.Shape    # inner boundary of the core
+    hollow_iml_solid: cq.Shape  # inner boundary of the INNER face sheet = cavity
     parting_solid: cq.Solid     # below-camber prism, shared by every body's split
     timings_s: dict = field(default_factory=dict)
 
@@ -167,9 +190,10 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     """Per-station chained full-value offset (face_mm, core_mm, face_mm — see
     module docstring) + ruled loft, over the FULL section list exactly as the
     OML itself is lofted (loft.py's build_section_wire, same per-station
-    points), plus the below-camber parting prism for the upper/lower split —
-    clean-span construction, see module docstring for the device-region
-    limitation."""
+    points), plus the below-camber parting prism for the upper/lower split.
+    When `config.te_surface` is enabled, each loft is then cove-fidelity-
+    corrected for the wing body (module docstring) — the control-surface
+    scope limit still applies."""
     face_mm = face_sheet_thickness_mm(config)
     core_mm = config.skin.core.thickness_mm
     timings: dict = {}
@@ -191,6 +215,17 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     core_iml_solid = cq.Solid.makeLoft(core_wires, ruled=True)
     hollow_iml_solid = cq.Solid.makeLoft(hollow_wires, ruled=True)
     timings["lofts_s"] = time.perf_counter() - t0
+
+    te = config.te_surface
+    if te is not None and te.enabled:
+        t0 = time.perf_counter()
+        cove_face = build_cove_offset_region(config, sections, face_mm)
+        cove_core = build_cove_offset_region(config, sections, face_mm + core_mm)
+        cove_hollow = build_cove_offset_region(config, sections, face_mm + core_mm + face_mm)
+        face_iml_solid = fuzzy_cut(face_iml_solid, cove_face)
+        core_iml_solid = fuzzy_cut(core_iml_solid, cove_core)
+        hollow_iml_solid = fuzzy_cut(hollow_iml_solid, cove_hollow)
+        timings["cove_fidelity_s"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     parting_wires = [build_section_wire(_parting_polygon(sec)) for sec in sections]

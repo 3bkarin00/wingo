@@ -477,3 +477,36 @@ meaningful change: what changed, why, and what it retired/added.
   assert on every sandwich export) and `tools/viewer/app.js` (new "False
   spar (P6 WIP)" layer, lime green). NO frozen gate, validator, or config
   was changed.
+
+## 2026-07-11 — P6: cove-arc IML fidelity for the wing sandwich
+
+- Resolves `iml.py`'s DELIBERATE SCOPE LIMIT: inside an enabled
+  te_surface's spanwise window, the per-station sandwich offsets were still
+  built from the ORIGINAL uncut airfoil sections, not the true cove-arc cut
+  boundary (`te_cut.py`'s `cove_region`) — the actual defect this produced
+  (empty or uncontrolled-thickness face sheet right at the cove lip) is
+  worked through in docs/r0_findings/p06.md's new addendum.
+- `cove_profile.build_cove_arc_points` gained an `extra_radius_mm` parameter
+  (default 0.0, existing call sites unaffected) — grows the cove arc
+  concentrically. `te_cut.build_cove_offset_region(config, sections, d)`
+  (new): loft of that grown arc over the exact station set `cove_region`
+  itself uses. `iml.build_sandwich_lofts`: when te_surface is enabled,
+  subtracts this region from each of the three offset lofts
+  (`d = face_mm`, `face_mm+core_mm`, `stack_mm`) before the existing
+  `build_sandwich_body` boolean chain runs unchanged. No new R0 probe — pure
+  concentric-arc offset, no `offset2D` self-clip risk.
+- Verified against the real kernel (`tests/configs/devices/te_half.yaml`,
+  wingo.coder): sandwich shells still 3-ring-partitioned, watertight,
+  shard-free (`cove_fidelity_s=93.9s` added cost). `false_spar.py`
+  (consumes the same now-corrected `hollow_iml_solid`) re-verified in the
+  same run: volume 31442→10237 mm³, CS clearance 5.50→7.42mm — smaller,
+  better-clearanced cavity, consistent with the cavity now stopping at the
+  true cove boundary instead of the old over-extended one.
+- `SandwichLofts`'s three IML solid fields retyped `cq.Solid`→`cq.Shape`
+  (the cove-fidelity cut can return a compound); `false_spar.build_false_spar`'s
+  `hollow_iml_solid` parameter likewise.
+- Still deferred: the control-surface nose's own sandwich (mirror
+  construction, inward from a radius-R arc) — not wired into any
+  export/gate path yet.
+- Regenerated `tools/viewer/dist/viewer.html` + `artifacts/viewer_data.json`
+  from this run for visual verification (both gitignored, not committed).

@@ -86,7 +86,7 @@ class FalseSpar:
 
 
 def build_false_spar(
-    config: Config, sections: list[PlacedSection], hollow_iml_solid: cq.Solid
+    config: Config, sections: list[PlacedSection], hollow_iml_solid: cq.Shape
 ) -> FalseSpar:
     """Build the wing-side closing wall for the enabled te_surface device.
     `sections` must be the same half-span PlacedSection list the OML/IML
