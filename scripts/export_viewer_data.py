@@ -132,11 +132,13 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     from backend.geometry.iml import build_sandwich_body, build_sandwich_lofts
     from backend.geometry.loft import is_watertight
 
-    # include_hollow_interior=False: the viewer only renders shells, and the
-    # skipped body ∩ hollow_IML boolean is among the most expensive
-    # operations in iml.py (~370-670s measured — see its docstring).
+    # include_hollow_interior=True: ribs.build_ribs (below) needs the cavity
+    # solid. Was False (viewer-shells-only shortcut, skipping the body ∩
+    # hollow_IML boolean — among the most expensive operations in iml.py,
+    # ~370-670s measured) before ribs existed; the real P6 pipeline always
+    # needed it anyway (iml.py's own docstring already said so).
     lofts = build_sandwich_lofts(config, sections)
-    wing_sw = build_sandwich_body(res.wing, lofts, include_hollow_interior=False)
+    wing_sw = build_sandwich_body(res.wing, lofts, include_hollow_interior=True)
     print(f"    sandwich build timings: lofts={lofts.timings_s}, body={wing_sw.timings_s}", flush=True)
 
     def _checked_volume(label: str, shape) -> float:
@@ -203,6 +205,29 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     print(f"    false spar verified: vol={vol['false_spar']:.1f} mm^3, "
           f"thickness={fs.thickness_mm:.2f} mm, CS clearance={cs_clearance:.2f} mm", flush=True)
 
+    # Ribs (backend/geometry/ribs.py) — verified in-run: every built rib is
+    # asserted a single valid watertight solid (build_ribs itself already
+    # falls back to a solid slab, or skips the plane entirely, rather than
+    # ever hand back something that fails that check — see its module
+    # docstring for why both outcomes are expected, not just tolerated).
+    from backend.geometry.reference import build_rib_planes
+    from backend.geometry.ribs import build_ribs
+
+    t0 = time.perf_counter()
+    rib_planes = build_rib_planes(config)
+    rib_set = build_ribs(config, wing_sw.hollow_interior, rib_planes)
+    ribs_timing_s = time.perf_counter() - t0
+    for rib in rib_set.ribs:
+        solids, shards = filter_shards(rib.solid, min_volume=1e-6)
+        assert len(solids) == 1 and not shards and is_watertight(solids[0]), (
+            f"rib at y={rib.y_mm:.1f}: not a single valid watertight solid "
+            f"({len(solids)} solids, {len(shards)} shards)"
+        )
+    print(f"    ribs verified: {ribs_timing_s:.1f}s, {len(rib_set.ribs)}/{len(rib_planes)} built "
+          f"({len(rib_set.fallback_solid)} fell back to solid, "
+          f"{len(rib_set.skipped_no_section)} skipped at y={rib_set.skipped_no_section}), "
+          f"all single/valid/watertight", flush=True)
+
     t0 = time.perf_counter()
     tess = {
         "wing_face_outer_upper": _tessellate(wing_sw.face_outer_upper),
@@ -213,6 +238,8 @@ def _sandwich_export(config: Config, sections, res) -> dict:
         "wing_face_inner_lower": _tessellate(wing_sw.face_inner_lower),
         "wing_false_spar": _tessellate(fs.solid),
     }
+    for rib in rib_set.ribs:
+        tess[f"wing_rib_{rib.y_mm:.0f}"] = _tessellate(rib.solid)
     print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
           f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
 

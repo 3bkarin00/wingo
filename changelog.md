@@ -576,3 +576,49 @@ meaningful change: what changed, why, and what it retired/added.
   list to every other loft boolean'd against it — a mismatch passes every
   per-shape `isValid()` check and only fails (or silently produces wrong
   geometry) on a sufficiently extreme config.
+
+## 2026-07-12 — P6: ribs (plane ∩ inner volume, plan.md §8.7)
+
+- New `backend/geometry/ribs.py`: one rib per P3 rib plane
+  (`reference.build_rib_planes`), cut from `build_sandwich_body`'s
+  `hollow_interior` cavity solid. Took 6 rounds of empirical iteration on
+  `tests/configs/edge/high_taper.yaml` to find a reliable construction
+  route — full trail in docs/r0_findings/p06.md's new addendum. Final
+  route: `BRepAlgoAPI_Section` (same as `cove_profile.section_points`) +
+  `Wire.assembleEdges`, walked via `BRepTools_WireExplorer` (orientation-
+  aware — naively pulling `edge.startPoint()` scrambles the polygon) into
+  a clean `Wire.makePolygon`, extruded as ONE full-thickness prism
+  (`Solid.extrudeLinear`) from the wire shifted `-thickness/2` (not two
+  half-thickness prisms fused at the plane — hit the same F4 tangent-
+  boundary hazard `booleans.py`'s fuzzy tolerance already exists for).
+  Lightening holes: `offset2D` inset + an oversized cutting prism +
+  `fuzzy_cut` (this codebase's own proven boolean helper, not
+  `extrudeLinear`'s own inner-wire parameter, which proved fragile here).
+- Graceful degradation, not crash: every rib is verified (exactly one
+  solid, valid, watertight); if the lightening-hole cut fails that check
+  (an 8mm margin genuinely doesn't fit `high_taper.yaml`'s ~100mm² tip
+  cross-section), falls back to a solid rib slab and records it in
+  `RibSet.fallback_solid` — same posture as `iml.py`'s existing aft
+  self-clip (ramp/skip the optional feature rather than error).
+  `RibSet.skipped_no_section` covers planes outside the body's span OR
+  where the cross-section isn't one simple closed loop (device-window
+  edges — `Wire.assembleEdges` can raise `DisconnectedWire` outright
+  there, now caught).
+- Wired into `scripts/export_viewer_data.py`: `include_hollow_interior`
+  flipped `False→True` (ribs need the cavity solid the viewer-only
+  shortcut was skipping — `iml.py`'s own docstring already said the real
+  pipeline always needs it). Every built rib re-verified in-run (single/
+  valid/watertight assert). Viewer: new dynamic "Ribs (N, P6 WIP)" toggle
+  layer (`tools/viewer/app.js`, orange `RIB_SOLID`), grouped since rib
+  count/naming varies per config (same pattern as the existing spar
+  layers).
+- Verified against the real kernel, standalone AND in the full pipeline:
+  `high_taper.yaml` 5/5 ribs (4 fell back to solid); `te_half.yaml` 6/7
+  built in the full pipeline (only y=660, the device-window start edge,
+  genuinely skipped — a disconnected cross-section there, the deferred
+  device-window-edge-rib scope limit, not a bug). One rib plane (y=900)
+  built in the full-pipeline run where a standalone probe run had skipped
+  it — an instance of this project's already-documented run-to-run
+  boundary-geometry variance (docs/known_issues.md), confirmed not a
+  construction bug by re-checking the SAME code produced a valid result
+  both times, just landing on different sides of a razor-thin margin.
