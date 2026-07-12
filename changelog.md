@@ -622,3 +622,32 @@ meaningful change: what changed, why, and what it retired/added.
   boundary-geometry variance (docs/known_issues.md), confirmed not a
   construction bug by re-checking the SAME code produced a valid result
   both times, just landing on different sides of a razor-thin margin.
+
+## 2026-07-12 — P6: spars trimmed to IML (plan.md §8.7)
+
+- New `backend/geometry/spar_trim.py`: thickens P3's zero-thickness ruled
+  spar surfaces into real webs and trims each to `hollow_interior` (the
+  same cavity solid ribs.py already cuts from — reused, not recomputed).
+  Per-station rectangle (web-thickness wide, centered on the interpolated
+  `xc`, oversized vertically past the true skin) lofted `ruled=True`, then
+  `fuzzy_cut` against `hollow_interior` — the same generously-oversized-
+  blank + real-boolean-trim pattern already established for ribs and the
+  false spar. Worked on the first real-kernel attempt (unlike ribs' 6-round
+  trail) since it reuses the per-station-profile-then-loft route directly
+  instead of sectioning a boolean result.
+- `reference.py`'s `_get_canonical_points_at_xc` promoted to public
+  (`get_canonical_points_at_xc`, no leading underscore) since spar_trim.py
+  needs the same per-station upper/lower-skin lookup P3's own spar
+  construction already uses. No other call sites to update.
+- Wired into `scripts/export_viewer_data.py` (`include_hollow_interior`
+  was already flipped `True` for ribs; spars reuse the same solid — no
+  extra expensive boolean) and `tools/viewer/app.js` (new dynamic
+  "Trimmed spars" toggle layer, red `SPAR_TRIMMED`).
+- Verified against the real kernel: `high_taper.yaml` (1 spar) — single
+  valid watertight solid. `te_half.yaml` full pipeline (2 spars) — `main`
+  1 solid, `rear` split into 2 valid/watertight solids at the device
+  window (physically expected: the wing-side rear spar's web naturally
+  discontinues where the hinge/false-spar mechanism takes over — same
+  underlying geometry as ribs' device-window scope limit, not a defect).
+  Verification accepts ≥1 valid/watertight solids per spar for this
+  reason, not exactly one.

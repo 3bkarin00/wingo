@@ -8,6 +8,7 @@
   var SANDWICH_INNER = 0x2dd4bf; // INNER face-sheet shells — third layer of the panel
   var FALSE_SPAR = 0xa3e635; // device-cut closing wall — distinct from KINEMATIC's amber
   var RIB_SOLID = 0xfb923c; // solid rib plates — distinct from every other P6 layer color
+  var SPAR_TRIMMED = 0xef4444; // IML-trimmed spar webs — distinct from the P3 wireframe spar's STRUCTURE blue
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -386,6 +387,10 @@
       if (ribKeys.length) {
         layerRows.push(["sandwich_ribs", "Ribs (" + ribKeys.length + ", P6 WIP)", RIB_SOLID]);
       }
+      var sparTrimKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_spar_trimmed_") === 0; });
+      if (sparTrimKeys.length) {
+        layerRows.push(["sandwich_spars_trimmed", "Trimmed spars (" + sparTrimKeys.length + ", P6 WIP)", SPAR_TRIMMED]);
+      }
     }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
@@ -533,6 +538,14 @@
       if (ribGroupSolid.children.length) {
         root.add(ribGroupSolid);
         layers.sandwich_ribs = ribGroupSolid;
+      }
+
+      var sparTrimGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_spar_trimmed_") === 0; })
+        .forEach(function (key) { sparTrimGroup.add(indexedMesh(data.sandwich[key], SPAR_TRIMMED, 0.85)); });
+      if (sparTrimGroup.children.length) {
+        root.add(sparTrimGroup);
+        layers.sandwich_spars_trimmed = sparTrimGroup;
       }
     }
 

@@ -228,6 +228,27 @@ def _sandwich_export(config: Config, sections, res) -> dict:
           f"{len(rib_set.skipped_no_section)} skipped at y={rib_set.skipped_no_section}), "
           f"all single/valid/watertight", flush=True)
 
+    # Spars trimmed to IML (backend/geometry/spar_trim.py) — verified
+    # in-run: every trimmed web's kept solids (post shard-filter) must be
+    # valid and watertight. Splitting into multiple solids (e.g. the rear
+    # spar at a device window, discontinued where the hinge/false-spar take
+    # over structurally) is expected, not an error — only shards/invalidity/
+    # non-watertightness would be.
+    from backend.geometry.spar_trim import build_trimmed_spars
+
+    t0 = time.perf_counter()
+    trimmed_spars = build_trimmed_spars(config, sections, wing_sw.hollow_interior)
+    spars_timing_s = time.perf_counter() - t0
+    for spar in trimmed_spars:
+        solids, shards = filter_shards(spar.solid, min_volume=1e-6)
+        assert solids and not shards and all(is_watertight(s) for s in solids), (
+            f"spar {spar.name}: not all-valid/watertight after shard filter "
+            f"({len(solids)} solids, {len(shards)} shards)"
+        )
+    print(f"    spars verified: {spars_timing_s:.1f}s, "
+          f"{ {s.name: round(sum(sh.Volume() for sh in filter_shards(s.solid, min_volume=1e-6)[0]), 1) for s in trimmed_spars} } mm^3, "
+          f"all valid/watertight", flush=True)
+
     t0 = time.perf_counter()
     tess = {
         "wing_face_outer_upper": _tessellate(wing_sw.face_outer_upper),
@@ -240,6 +261,8 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     }
     for rib in rib_set.ribs:
         tess[f"wing_rib_{rib.y_mm:.0f}"] = _tessellate(rib.solid)
+    for spar in trimmed_spars:
+        tess[f"wing_spar_trimmed_{spar.name}"] = _tessellate(spar.solid)
     print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
           f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
 

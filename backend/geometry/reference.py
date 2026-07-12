@@ -43,8 +43,11 @@ class ReferenceGeometry:
     hardpoints: list[cq.Vector]
 
 
-def _get_canonical_points_at_xc(pts: np.ndarray, xc: float) -> tuple[float, float, float]:
-    """Return (upper_z, lower_z, camber_z) at chord fraction xc."""
+def get_canonical_points_at_xc(pts: np.ndarray, xc: float) -> tuple[float, float, float]:
+    """Return (upper_z, lower_z, camber_z) at chord fraction xc. Public (not
+    module-private) — backend/geometry/spar_trim.py reuses it to build each
+    spar's per-station thickened-web rectangle at the same xc P3's own
+    zero-thickness ruled surface uses."""
     upper, lower = split_surfaces(pts)
     zu = float(interp_surface(np.array([xc]), upper)[0])
     zl = float(interp_surface(np.array([xc]), lower)[0])
@@ -165,7 +168,7 @@ def build_spar_surfaces(config: Config, sections: list[PlacedSection]) -> dict[s
         for sec in sections:
             xc = spar.xc_root + sec.y_frac * (spar.xc_tip - spar.xc_root)
             chord, twist, pts = interp_station(config, sec.y_frac, config.airfoils.resample_points, te_min_mm)
-            zu, zl, _ = _get_canonical_points_at_xc(pts, xc)
+            zu, zl, _ = get_canonical_points_at_xc(pts, xc)
             
             canonical_pts = np.array([[xc, zl], [xc, zu]])
             le_x, z_base = le_and_z_offset(config, sec.y_frac, half_span_mm)
@@ -261,7 +264,7 @@ def build_hardpoints(config: Config) -> list[cq.Vector]:
     for bolt in config.hardpoints.fuselage_attachment.bolts:
         y_frac = bolt.y_mm / half_span_mm
         chord, twist, _pts = interp_station(config, y_frac, config.airfoils.resample_points, te_min_mm)
-        _, _, zc = _get_canonical_points_at_xc(_pts, bolt.x_c)
+        _, _, zc = get_canonical_points_at_xc(_pts, bolt.x_c)
         canonical_pts = np.array([[bolt.x_c, zc]])
         le_x, z_base = le_and_z_offset(config, y_frac, half_span_mm)
         placed = place_section(
