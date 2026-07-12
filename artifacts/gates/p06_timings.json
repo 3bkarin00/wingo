@@ -1,0 +1,29 @@
+{
+  "te_half_te_cut": {
+    "station_data_s": 0.16854692599736154,
+    "loft_regions_s": 0.5618036079686135,
+    "aft_boxes_s": 0.0068751099752262235,
+    "wing_cut_s": 31.172438199981116,
+    "cs_fuse_s": 0.6515264509944245,
+    "cs_common_s": 22.202753213990945,
+    "total_s": 54.76395637402311
+  },
+  "te_half": {
+    "lofts_s": {
+      "offset_wires_s": 0.12872355000581592,
+      "lofts_s": 5.608666399028152,
+      "cove_fidelity_s": 119.49620558798779,
+      "parting_solid_s": 0.09847114601870999
+    },
+    "body_s": {
+      "face_outer_cut_s": 51.59066540503409,
+      "core_ring_s": 199.36040285904892,
+      "face_inner_ring_s": 330.5048710239935,
+      "face_outer_split_s": 39.77355018304661,
+      "core_split_s": 52.416168555035256,
+      "face_inner_split_s": 57.46275746601168,
+      "hollow_common_s": 62.93179115199018
+    },
+    "total_s": 919.3831547549926
+  }
+}

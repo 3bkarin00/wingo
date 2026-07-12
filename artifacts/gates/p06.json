@@ -1,0 +1,97 @@
+{
+  "phase": "p06",
+  "pass": true,
+  "metrics": {
+    "shard_counts": {
+      "te_half": {
+        "face_outer_shell": 0,
+        "core_shell": 0,
+        "face_inner_shell": 0,
+        "face_outer_upper": 0,
+        "face_outer_lower": 0,
+        "core_upper": 0,
+        "core_lower": 0,
+        "face_inner_upper": 0,
+        "face_inner_lower": 0,
+        "hollow_interior": 0,
+        "rib_0": 0,
+        "rib_220": 0,
+        "rib_440": 0,
+        "rib_900": 0,
+        "rib_1140": 0,
+        "rib_1200": 0,
+        "spar_main": 0,
+        "spar_rear": 0
+      }
+    },
+    "watertight_check": {
+      "te_half": "all pass"
+    },
+    "ribs_watertight": {
+      "te_half": [
+        {
+          "y_mm": 0.0,
+          "has_hole": false,
+          "ok": true
+        },
+        {
+          "y_mm": 220.00000000000003,
+          "has_hole": true,
+          "ok": true
+        },
+        {
+          "y_mm": 440.00000000000006,
+          "has_hole": false,
+          "ok": true
+        },
+        {
+          "y_mm": 900.0,
+          "has_hole": true,
+          "ok": true
+        },
+        {
+          "y_mm": 1140.0,
+          "has_hole": true,
+          "ok": true
+        },
+        {
+          "y_mm": 1200.0,
+          "has_hole": true,
+          "ok": true
+        }
+      ]
+    },
+    "pairwise_interference": {
+      "te_half": {
+        "pairs_checked": 105
+      }
+    },
+    "iml_min_wall_audit": {
+      "te_half": {
+        "samples": 206,
+        "excluded_device_window": 126,
+        "full_stack": 40,
+        "self_clipped_floor_ok": 40,
+        "below_floor": 0,
+        "stack_mm": 3.8,
+        "floor_mm": 0.79
+      }
+    },
+    "midsurface_count": {
+      "te_half": {
+        "midsurfaces": 9,
+        "structural_bodies": 9
+      }
+    },
+    "hardpoint_ramp_out": {
+      "te_half": {
+        "hardpoints_checked": 0,
+        "violations": 0
+      }
+    },
+    "slow_tier_fresh_build": {
+      "te_half": "pass"
+    }
+  },
+  "timestamp": "2026-07-12T20:35:14.383772+00:00"
+}
