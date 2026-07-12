@@ -68,6 +68,11 @@ class Rib:
     solid: cq.Shape
     has_hole: bool
     area_mm2: float
+    # The rib's own centerline face (module docstring's `_ordered_wire_from_
+    # section` wire, filled — a rib is flat by construction) — plan.md
+    # §8.7's midsurface requirement for this body is already free once the
+    # solid is built; see backend/geometry/midsurface.py.
+    midsurface_face: cq.Face
 
 
 @dataclass
@@ -184,6 +189,10 @@ def build_ribs(
 
         solids, _shards = filter_shards(rib_shape, min_volume=1e-6)
         area_mm2 = solids[0].Volume() / thickness_mm if solids else 0.0
-        result.ribs.append(Rib(y_mm=y, solid=rib_shape, has_hole=has_hole, area_mm2=area_mm2))
+        midsurface_face = cq.Face.makeFromWires(wire)
+        result.ribs.append(Rib(
+            y_mm=y, solid=rib_shape, has_hole=has_hole, area_mm2=area_mm2,
+            midsurface_face=midsurface_face,
+        ))
 
     return result

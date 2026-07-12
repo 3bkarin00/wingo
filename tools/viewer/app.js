@@ -9,6 +9,7 @@
   var FALSE_SPAR = 0xa3e635; // device-cut closing wall — distinct from KINEMATIC's amber
   var RIB_SOLID = 0xfb923c; // solid rib plates — distinct from every other P6 layer color
   var SPAR_TRIMMED = 0xef4444; // IML-trimmed spar webs — distinct from the P3 wireframe spar's STRUCTURE blue
+  var MIDSURFACE = 0xfacc15; // FEA midsurface shells (skin/rib/spar) — bright yellow, distinct from every solid layer
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -391,6 +392,10 @@
       if (sparTrimKeys.length) {
         layerRows.push(["sandwich_spars_trimmed", "Trimmed spars (" + sparTrimKeys.length + ", P6 WIP)", SPAR_TRIMMED]);
       }
+      var midsurfaceKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_midsurface_") === 0; });
+      if (midsurfaceKeys.length) {
+        layerRows.push(["sandwich_midsurfaces", "Midsurfaces (" + midsurfaceKeys.length + ", P6 WIP)", MIDSURFACE]);
+      }
     }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
@@ -546,6 +551,14 @@
       if (sparTrimGroup.children.length) {
         root.add(sparTrimGroup);
         layers.sandwich_spars_trimmed = sparTrimGroup;
+      }
+
+      var midsurfaceGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_midsurface_") === 0; })
+        .forEach(function (key) { midsurfaceGroup.add(indexedMesh(data.sandwich[key], MIDSURFACE, 0.6)); });
+      if (midsurfaceGroup.children.length) {
+        root.add(midsurfaceGroup);
+        layers.sandwich_midsurfaces = midsurfaceGroup;
       }
     }
 

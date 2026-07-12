@@ -651,3 +651,34 @@ meaningful change: what changed, why, and what it retired/added.
   underlying geometry as ribs' device-window scope limit, not a defect).
   Verification accepts ≥1 valid/watertight solids per spar for this
   reason, not exactly one.
+
+## 2026-07-12 — P6: midsurface faces (plan.md §8.7, D15)
+
+- New `backend/geometry/midsurface.py` (skin only) — ribs and spars
+  already had theirs as free byproducts: `ribs.Rib.midsurface_face` now
+  exposes the pre-thickening wire ribs.py already built; P3's
+  `reference.build_spar_surfaces` zero-thickness ruled shells ARE the spar
+  midsurfaces exactly. D15 ("Mechanical layered shell sections") settles
+  the P6 gate's "midsurface count matches structural body count"
+  criterion: ONE shell per WALL (not one per sandwich layer — the layup
+  is a shell-section material property, applied later) — so 1 skin + 1
+  per rib + 1 per spar.
+- Genuinely new API surface, R0-probed first
+  (`scripts/r0_probes/probe_ocp_shell_loft.py`): `BRepOffsetAPI_ThruSections`
+  with `isSolid=False` for a true open shell (no end caps) — the SAME
+  underlying call `cq.Solid.makeLoft` already uses everywhere else in this
+  project, just its other documented mode (`makeLoft` hardcodes
+  `isSolid=True`). Verified matching face count/area against the
+  equivalent solid loft's lateral faces before use.
+- Clean-span only (module docstring) — no ramp/cove-fidelity correction
+  on the skin midsurface yet, an explicit tracked follow-on matching every
+  other device-region refinement already deferred this phase.
+- Two more private→public promotions (same pattern as
+  `get_canonical_points_at_xc` for spar_trim.py): `iml.offset_wire` (was
+  `_offset_wire`).
+- Wired into `scripts/export_viewer_data.py` and `tools/viewer/app.js`
+  (new dynamic "Midsurfaces" toggle layer, yellow `MIDSURFACE`,
+  double-sided material since these are open shells).
+- Verified against the real kernel: `high_taper.yaml` — 7 midsurfaces ==
+  7 structural bodies. `te_half.yaml` full pipeline (ribs + trimmed
+  spars) — 9 midsurfaces == 9 structural bodies, 0.9s added cost.

@@ -249,6 +249,35 @@ def _sandwich_export(config: Config, sections, res) -> dict:
           f"{ {s.name: round(sum(sh.Volume() for sh in filter_shards(s.solid, min_volume=1e-6)[0]), 1) for s in trimmed_spars} } mm^3, "
           f"all valid/watertight", flush=True)
 
+    # Midsurfaces (backend/geometry/midsurface.py) — verified in-run: skin
+    # midsurface must be a genuine open shell (no enclosed volume); rib/spar
+    # midsurfaces (already-built byproducts of their own construction) must
+    # be valid. Face count vs structural-body count (P6 gate's own
+    # criterion): skin=1, ribs=len(rib_set.ribs), spars=len(spar_surfaces) —
+    # matched 1-for-1 against skin(1)+ribs+trimmed-spar-webs by construction.
+    from backend.geometry.midsurface import build_skin_midsurface
+    from backend.geometry.reference import build_spar_surfaces
+
+    t0 = time.perf_counter()
+    skin_midsurface = build_skin_midsurface(config, sections)
+    assert skin_midsurface.isValid() and not skin_midsurface.Solids(), (
+        "skin midsurface must be a valid open shell, not enclose a volume"
+    )
+    for rib in rib_set.ribs:
+        assert rib.midsurface_face.isValid(), f"rib midsurface at y={rib.y_mm} invalid"
+    spar_midsurfaces = build_spar_surfaces(config, sections)
+    for name, shell in spar_midsurfaces.items():
+        assert shell.isValid(), f"spar midsurface {name} invalid"
+    midsurface_timing_s = time.perf_counter() - t0
+    n_midsurfaces = 1 + len(rib_set.ribs) + len(spar_midsurfaces)
+    n_structural_bodies = 1 + len(rib_set.ribs) + len(trimmed_spars)
+    assert n_midsurfaces == n_structural_bodies, (
+        f"midsurface count {n_midsurfaces} != structural body count {n_structural_bodies}"
+    )
+    print(f"    midsurfaces verified: {midsurface_timing_s:.1f}s, "
+          f"skin_area={sum(f.Area() for f in skin_midsurface.Faces()):.1f}mm^2, "
+          f"{n_midsurfaces} midsurfaces == {n_structural_bodies} structural bodies", flush=True)
+
     t0 = time.perf_counter()
     tess = {
         "wing_face_outer_upper": _tessellate(wing_sw.face_outer_upper),
@@ -263,6 +292,14 @@ def _sandwich_export(config: Config, sections, res) -> dict:
         tess[f"wing_rib_{rib.y_mm:.0f}"] = _tessellate(rib.solid)
     for spar in trimmed_spars:
         tess[f"wing_spar_trimmed_{spar.name}"] = _tessellate(spar.solid)
+    # "wing_midsurface_" prefix (not "wing_rib_"/"wing_spar_...") so these
+    # never collide with the solid-rib/solid-spar viewer filters, which
+    # match on THEIR OWN "wing_rib_"/"wing_spar_trimmed_" prefixes.
+    tess["wing_midsurface_skin"] = _tessellate(skin_midsurface)
+    for rib in rib_set.ribs:
+        tess[f"wing_midsurface_rib_{rib.y_mm:.0f}"] = _tessellate(rib.midsurface_face)
+    for name, shell in spar_midsurfaces.items():
+        tess[f"wing_midsurface_spar_{name}"] = _tessellate(shell)
     print(f"    sandwich tessellation: {time.perf_counter()-t0:.1f}s total, "
           f"{ {k.replace('wing_', ''): len(v['triangles']) for k, v in tess.items()} } tris", flush=True)
 

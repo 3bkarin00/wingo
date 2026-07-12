@@ -182,7 +182,7 @@ class SandwichBody:
     timings_s: dict = field(default_factory=dict)
 
 
-def _offset_wire(wire: cq.Wire, distance_mm: float) -> cq.Wire:
+def offset_wire(wire: cq.Wire, distance_mm: float) -> cq.Wire:
     result = wire.offset2D(-distance_mm, kind="intersection")
     return result[0] if isinstance(result, list) else result
 
@@ -316,9 +316,9 @@ def build_sandwich_lofts(config: Config, sections: list[PlacedSection]) -> Sandw
     for sec in ramp_sections:
         outer_wire = build_section_wire(sec.points)
         local_core_mm = _ramped_core_mm(sec.y_mm, core_mm, ramp_ratio, y_tip_mm)
-        face_wire = _offset_wire(outer_wire, face_mm)
-        core_wire = _offset_wire(face_wire, local_core_mm)
-        hollow_wire = _offset_wire(core_wire, face_mm)
+        face_wire = offset_wire(outer_wire, face_mm)
+        core_wire = offset_wire(face_wire, local_core_mm)
+        hollow_wire = offset_wire(core_wire, face_mm)
         face_wires.append(face_wire)
         core_wires.append(core_wire)
         hollow_wires.append(hollow_wire)
