@@ -62,12 +62,15 @@ def spar_web_thickness_mm(config: Config, spar_name: str) -> float:
 
 
 def _spar_blank(
-    config: Config, sections: list[PlacedSection], xc_root: float, xc_tip: float, thickness_mm: float
+    config: Config, sections: list[PlacedSection], xc_root: float, xc_tip: float,
+    thickness_mm: float, xc_offset_mm: float = 0.0,
 ) -> cq.Solid:
     """Per-station rectangle (chordwise width = thickness_mm centered on the
     interpolated xc, vertical extent oversized past zu/zl) lofted ruled=True
     — same construction style as every other per-station body in this
-    project (never OCC shell/thicken)."""
+    project (never OCC shell/thicken). `xc_offset_mm` shifts the rectangle
+    chordwise by a constant mm distance (D23 box spars place the same blank
+    at ±web_spacing/2); 0.0 keeps the original single-web behavior exactly."""
     half_span_mm = config.planform.span_mm / 2.0 if config.planform.mirror else config.planform.span_mm
     te_min_mm = config.airfoils.te_min_thickness_mm
     resample_points = config.airfoils.resample_points
@@ -77,6 +80,7 @@ def _spar_blank(
         xc = xc_root + sec.y_frac * (xc_tip - xc_root)
         chord, twist, pts = interp_station(config, sec.y_frac, resample_points, te_min_mm)
         zu, zl, _ = get_canonical_points_at_xc(pts, xc)
+        xc = xc + xc_offset_mm / chord  # zu/zl sampled at the CENTERLINE xc (box webs share the centerline's height range)
         oversize = SPAR_HEIGHT_OVERSIZE_CHORD_FRAC
         half_width_frac = (thickness_mm / 2.0) / chord
 

@@ -85,6 +85,42 @@ class Spar(BaseModel):
     xc_tip: float = Field(ge=0, le=1)
     web: SparWeb
     tongue: Tongue
+    # D23 spar shape variants (plan.md §8.7 step 7a). `web` is the original
+    # plain thickened-surface behavior — the default keeps every pre-D23
+    # config byte-identical.
+    shape: Literal["web", "c_channel", "i_beam", "box", "tube"] = "web"
+    # c_channel / i_beam only:
+    cap_width_mm: float | None = Field(default=None, gt=0)
+    cap_thickness_mm: float | None = Field(default=None, gt=0)
+    inside_iml: bool = False  # cap skin-side face stood off the inner face sheet by the bond gap
+    # box only:
+    web_spacing_mm: float | None = Field(default=None, gt=0)
+    # tube only:
+    od_root_mm: float | None = Field(default=None, gt=0)
+    od_tip_mm: float | None = Field(default=None, gt=0)
+    wall_mm: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _shape_fields_present(self) -> "Spar":
+        if self.shape in ("c_channel", "i_beam"):
+            if self.cap_width_mm is None or self.cap_thickness_mm is None:
+                raise ValueError(
+                    f"spar '{self.name}': shape={self.shape} requires cap_width_mm and cap_thickness_mm (D23)"
+                )
+        if self.shape == "box" and self.web_spacing_mm is None:
+            raise ValueError(f"spar '{self.name}': shape=box requires web_spacing_mm (D23)")
+        if self.shape == "tube":
+            if self.od_root_mm is None or self.od_tip_mm is None or self.wall_mm is None:
+                raise ValueError(
+                    f"spar '{self.name}': shape=tube requires od_root_mm, od_tip_mm and wall_mm (D23)"
+                )
+            min_od = min(self.od_root_mm, self.od_tip_mm)
+            if 2 * self.wall_mm >= min_od:
+                raise ValueError(
+                    f"spar '{self.name}': tube wall_mm={self.wall_mm} leaves no bore "
+                    f"(2*wall >= min od {min_od})"
+                )
+        return self
 
 
 class RibConstruction(BaseModel):
@@ -97,10 +133,39 @@ class LighteningHoles(BaseModel):
     margin_mm: float = Field(gt=0)
 
 
+class RibOverride(BaseModel):
+    """Per-rib override (plan.md §6, D25) — `index` is the rib PLANE's
+    position in spanwise order (reference.build_rib_planes output), which
+    is stable even when a plane yields no rib at a device edge."""
+
+    index: int = Field(ge=0)
+    interlock_enabled: bool = True
+
+
 class Ribs(BaseModel):
     count: int = Field(gt=0)
     construction: RibConstruction
     lightening_holes: LighteningHoles
+    overrides: list[RibOverride] = Field(default_factory=list)
+
+
+class Interlock(BaseModel):
+    """D25 tab-and-slot rib×spar interlock — web-bearing spar shapes only
+    (web/c_channel/i_beam); box/tube crossings keep the plain D23 cutout.
+    Default disabled: a config without a `structure:` block must produce
+    pre-D25 geometry unchanged."""
+
+    enabled: bool = False
+    style: Literal["tab_slot"] = "tab_slot"
+    tabs_per_crossing: int = Field(default=2, gt=0)
+    tab_width_mm: float = Field(default=6.0, gt=0)
+    protrusion_mm: float = Field(default=0.0, ge=0)  # 0 = flush with far web face; >0 = proud
+    fit_clearance_mm: float = Field(default=0.1, gt=0)
+    edge_margin_mm: float = Field(default=3.0, gt=0)
+
+
+class Structure(BaseModel):
+    interlock: Interlock = Field(default_factory=Interlock)
 
 
 class Hinges(BaseModel):
@@ -213,6 +278,7 @@ class Config(BaseModel):
     skin: Skin
     spars: list[Spar] = Field(min_length=1)
     ribs: Ribs
+    structure: Structure = Field(default_factory=Structure)
     te_surface: DeviceWindow | None = None
     hardpoints: Hardpoints = Field(default_factory=Hardpoints)
     joint_retention: JointRetention | None = None

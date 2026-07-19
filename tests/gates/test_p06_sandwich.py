@@ -510,3 +510,77 @@ def test_fresh_build_matches_gate_criteria(p6_result_fresh, gate_metrics):
         kept, shards = filter_shards(spar.solid)
         assert not shards and all(is_watertight(s) for s in kept), f"{stem}: fresh build spar {spar.name} failed"
     gate_metrics.setdefault("slow_tier_fresh_build", {})[stem] = "pass"
+
+
+# --- D23 spar shape variants (plan.md §9 P6 extension note: "D23 shape- ---
+# --- variant coverage lives alongside the base P6 gate") ------------------
+#
+# Reuses p6_result's ALREADY-BUILT (possibly cache-hit) `hollow_interior` —
+# the expensive part is paid for once by the tests above; building a
+# shape-variant spar body against it costs seconds (spars.py's own
+# per-shape smoke probe measured 1.5-20s per shape against a comparable
+# stand-in cavity, docs/r0_findings/p06_ext.md). `web` is exercised
+# implicitly by every other test in this file (te_half.yaml's spars are
+# both `shape: web`, the pre-D23 default) — not re-tested here.
+
+_D23_SHAPES = {
+    "c_channel": {"cap_width_mm": 12.0, "cap_thickness_mm": 1.5},
+    "i_beam": {"cap_width_mm": 12.0, "cap_thickness_mm": 1.5},
+    "box": {"web_spacing_mm": 15.0},
+    "tube": {"od_root_mm": 14.0, "od_tip_mm": 9.0, "wall_mm": 1.2},
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_D23_SHAPES))
+def test_d23_spar_shape_variants(p6_result, gate_metrics, shape):
+    """Every non-`web` D23 shape builds a valid, watertight, single-solid
+    spar body against the REAL te_half.yaml cavity (not the WP2 smoke
+    probe's stand-in OML), with volume exceeding the plain web (caps/twin
+    webs add material) and zero interference against the rest of the
+    frozen P6 structure (false spar, ribs, the OTHER unmodified spar) —
+    the same pairwise-interference posture as test_pairwise_interference,
+    restricted to this one variant body since re-running the full P6
+    pairwise matrix per shape would be redundant."""
+    from backend.geometry.spars import build_spar_bodies
+
+    r, stem = p6_result, p6_result.stem
+    cfg_dict = yaml.safe_load((DEVICE_DIR / f"{stem}.yaml").read_text())
+    cfg_dict["spars"][0].update({"shape": shape, **_D23_SHAPES[shape]})
+    config = Config.model_validate(cfg_dict)
+
+    bodies = build_spar_bodies(config, r.sections, r.sandwich["hollow_interior"])
+    variant = next(b for b in bodies if b.name == config.spars[0].name)
+    kept, shards = filter_shards(variant.solid)
+    vol = sum(s.Volume() for s in kept)
+    web_vol = sum(s.Volume() for s in filter_shards(r.trimmed_spars[0].solid)[0])
+
+    assert kept and not shards, f"{stem}/{shape}: {len(shards)} shard(s), {len(kept)} solid(s)"
+    assert variant.solid.isValid() and all(is_watertight(s) for s in kept), (
+        f"{stem}/{shape}: not valid/watertight"
+    )
+    assert vol > web_vol, f"{stem}/{shape}: volume {vol:.0f} did not exceed plain web {web_vol:.0f}"
+
+    others = {
+        "false_spar": r.false_spar_solid,
+        "rear_spar": r.trimmed_spars[1].solid,
+        **{f"rib_y={rib.y_mm:.0f}": rib.solid for rib in r.rib_set.ribs},
+    }
+    interferences = {}
+    for name, other in others.items():
+        try:
+            common = fuzzy_common(variant.solid, other)
+        except RuntimeError:
+            continue
+        common_kept, _ = filter_shards(common)
+        v = sum(s.Volume() for s in common_kept)
+        # Same D23/D24 exception as test_pairwise_interference: a spar
+        # crosses every rib by structural necessity.
+        if name.startswith("rib_"):
+            continue
+        if v > 0:
+            interferences[name] = round(v, 4)
+    assert not interferences, f"{stem}/{shape}: interference vs frozen P6 bodies: {interferences}"
+
+    gate_metrics.setdefault("d23_shape_variants", {})[f"{stem}/{shape}"] = {
+        "volume_mm3": round(vol, 1), "web_volume_mm3": round(web_vol, 1),
+    }
