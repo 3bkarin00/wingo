@@ -1,0 +1,36 @@
+{
+  "phase": "p07",
+  "pass": true,
+  "metrics": {
+    "hinges_built": {
+      "te_half": {
+        "count": 3,
+        "failed": []
+      }
+    },
+    "watertight_check": {
+      "te_half": "all pass"
+    },
+    "hole_coaxiality": {
+      "te_half": {
+        "faces_checked": 12,
+        "worst_deviation_mm": 0.0,
+        "tolerance_mm": 0.05
+      }
+    },
+    "lug_tang_clearance": {
+      "te_half": {
+        "gap_mm": 5.0,
+        "worst_lug_to_cs_mm": 5.05,
+        "worst_tang_to_wing_mm": 12.3437
+      }
+    },
+    "lug_false_spar_bond": {
+      "te_half": "all bonded"
+    },
+    "slow_tier_fresh_build": {
+      "te_half": "pass"
+    }
+  },
+  "timestamp": "2026-07-14T08:56:32.609950+00:00"
+}

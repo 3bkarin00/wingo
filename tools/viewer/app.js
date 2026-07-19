@@ -10,6 +10,8 @@
   var RIB_SOLID = 0xfb923c; // solid rib plates — distinct from every other P6 layer color
   var SPAR_TRIMMED = 0xef4444; // IML-trimmed spar webs — distinct from the P3 wireframe spar's STRUCTURE blue
   var MIDSURFACE = 0xfacc15; // FEA midsurface shells (skin/rib/spar) — bright yellow, distinct from every solid layer
+  var HINGE_CARRIER = 0x38bdf8; // hinge carrier blocks (ADR-005) — sky blue, distinct from STRUCTURE's spar blue
+  var HINGE_TUBE = 0xe879f9; // hinge tube segments (ADR-005) — magenta, distinct from every other P7/P6 layer color
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -396,6 +398,14 @@
       if (midsurfaceKeys.length) {
         layerRows.push(["sandwich_midsurfaces", "Midsurfaces (" + midsurfaceKeys.length + ", P6 WIP)", MIDSURFACE]);
       }
+      var hingeCarrierKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_carrier_") > 0; });
+      if (hingeCarrierKeys.length) {
+        layerRows.push(["sandwich_hinge_carriers", "Hinge carriers (" + hingeCarrierKeys.length + ", P7)", HINGE_CARRIER]);
+      }
+      var hingeTubeKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_tube_") > 0; });
+      if (hingeTubeKeys.length) {
+        layerRows.push(["sandwich_hinge_tubes", "Hinge tubes (" + hingeTubeKeys.length + ", P7)", HINGE_TUBE]);
+      }
     }
     layerRows.forEach(function (row) {
       var rowKey = row[0], label = row[1], color = row[2];
@@ -559,6 +569,24 @@
       if (midsurfaceGroup.children.length) {
         root.add(midsurfaceGroup);
         layers.sandwich_midsurfaces = midsurfaceGroup;
+      }
+
+      // Pin-and-tube ROLE-typed hinge layers (ADR-005): carriers + tubes,
+      // wing-side and CS-side pooled per role so toggles stay two rows.
+      var hingeCarrierGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_carrier_") > 0; })
+        .forEach(function (key) { hingeCarrierGroup.add(indexedMesh(data.sandwich[key], HINGE_CARRIER, 0.9)); });
+      if (hingeCarrierGroup.children.length) {
+        root.add(hingeCarrierGroup);
+        layers.sandwich_hinge_carriers = hingeCarrierGroup;
+      }
+
+      var hingeTubeGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_tube_") > 0; })
+        .forEach(function (key) { hingeTubeGroup.add(indexedMesh(data.sandwich[key], HINGE_TUBE, 0.9)); });
+      if (hingeTubeGroup.children.length) {
+        root.add(hingeTubeGroup);
+        layers.sandwich_hinge_tubes = hingeTubeGroup;
       }
     }
 

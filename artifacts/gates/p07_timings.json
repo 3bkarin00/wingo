@@ -1,0 +1,14 @@
+{
+  "te_half_te_cut": {
+    "station_data_s": 0.16952735802624375,
+    "loft_regions_s": 0.5485765360062942,
+    "aft_boxes_s": 0.0044809760292992,
+    "wing_cut_s": 31.152106355992146,
+    "cs_fuse_s": 0.6450318599818274,
+    "cs_common_s": 22.13845453201793,
+    "total_s": 54.65819134900812
+  },
+  "te_half": {
+    "lofts_false_spar_hinges_s": 153.71395382098854
+  }
+}

@@ -205,6 +205,41 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     print(f"    false spar verified: vol={vol['false_spar']:.1f} mm^3, "
           f"thickness={fs.thickness_mm:.2f} mm, CS clearance={cs_clearance:.2f} mm", flush=True)
 
+    # Hinges, generated mode — pin-and-tube (backend/geometry/
+    # hinges_pin_tube.py, D26/ADR-005) — verified in-run: no construction
+    # failures, every tube coaxial with the true hinge axis within
+    # COAXIALITY_TOLERANCE_MM, carrier bond gaps real and positive (never
+    # touching), so a broken export never ships silently.
+    from backend.geometry.booleans import coaxial_cylinder_axis_deviation
+    from backend.geometry.hinges_pin_tube import build_pin_tube_hinges
+
+    t0 = time.perf_counter()
+    hinge_set = build_pin_tube_hinges(config, sections, res.control_surface, fs.solid)
+    hinges_timing_s = time.perf_counter() - t0
+    if hinge_set.stations:
+        assert not hinge_set.failed, f"hinge construction failures: {hinge_set.failed}"
+        bond_gap = tolerances.HINGE_CARRIER_BOND_GAP_MM
+        for st in hinge_set.stations:
+            for tube in (st.wing_tube, st.cs_tube):
+                devs = coaxial_cylinder_axis_deviation(tube, hinge_set.axis_p0, hinge_set.axis_dir)
+                assert devs and max(devs) <= tolerances.COAXIALITY_TOLERANCE_MM, (
+                    f"hinge station {st.index} tube coaxiality {devs} exceeds "
+                    f"{tolerances.COAXIALITY_TOLERANCE_MM}mm"
+                )
+            for carrier, other in [
+                (st.wing_carrier, hinge_set.false_spar_pocketed),
+                (st.cs_carrier, hinge_set.cs_pocketed),
+            ]:
+                dist_op = BRepExtrema_DistShapeShape(carrier.wrapped, other.wrapped)
+                dist_op.Perform()
+                assert 0 < dist_op.Value() <= bond_gap + tolerances.KERNEL_TOLERANCE_MM, (
+                    f"hinge station {st.index} carrier bond gap {dist_op.Value():.3f}mm "
+                    f"not in (0, {bond_gap}+tol] — bonded means explicit gap, never touching"
+                )
+        print(f"    hinges verified: {hinges_timing_s:.1f}s, {len(hinge_set.stations)} station(s) "
+              f"(pin_dia={hinge_set.pin_dia_mm}mm, tube_od={hinge_set.tube_od_mm}mm), "
+              f"all coaxial + bond gaps OK", flush=True)
+
     # Ribs (backend/geometry/ribs.py) — verified in-run: every built rib is
     # asserted a single valid watertight solid (build_ribs itself already
     # falls back to a solid slab, or skips the plane entirely, rather than
@@ -292,6 +327,13 @@ def _sandwich_export(config: Config, sections, res) -> dict:
         tess[f"wing_rib_{rib.y_mm:.0f}"] = _tessellate(rib.solid)
     for spar in trimmed_spars:
         tess[f"wing_spar_trimmed_{spar.name}"] = _tessellate(spar.solid)
+    for st in hinge_set.stations:
+        # Pin-and-tube ROLE-typed layers (ADR-005): carriers + tubes replace
+        # the retired lug/tang bodies.
+        tess[f"wing_hinge_carrier_{st.s_center:.0f}"] = _tessellate(st.wing_carrier)
+        tess[f"wing_hinge_tube_{st.s_center:.0f}"] = _tessellate(st.wing_tube)
+        tess[f"cs_hinge_carrier_{st.s_center:.0f}"] = _tessellate(st.cs_carrier)
+        tess[f"cs_hinge_tube_{st.s_center:.0f}"] = _tessellate(st.cs_tube)
     # "wing_midsurface_" prefix (not "wing_rib_"/"wing_spar_...") so these
     # never collide with the solid-rib/solid-spar viewer filters, which
     # match on THEIR OWN "wing_rib_"/"wing_spar_trimmed_" prefixes.
@@ -383,6 +425,13 @@ def _export_one(cfg_path: Path) -> dict:
             "face per wall) via 2D per-station offset + loft + subtract (F1: never OCC "
             "shell/thicken) — wrong within the TE device window, see the sandwich panel's warning"
         )
+        if config.te_surface.hinges.mode == "generated":
+            capabilities.append(
+                "P7: generated-mode hinge hardware — lug (wing-side, bonded to the false "
+                "spar) + tang (CS-side, embedded in the nose material) knuckle pairs, "
+                "coaxial pin bore verified against the true hinge axis, clearance to the "
+                "opposing body verified >= gap_mm. cots mode not yet implemented."
+            )
 
     return {
         "config_name": cfg_path.stem,
