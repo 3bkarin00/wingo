@@ -9,12 +9,24 @@ from this file by `make sync-agents` — never hand-edit `AGENTS.md`.
 ## Session protocol
 
 **START**: read `artifacts/state.json` → `handoff.md` → the current phase's
-section in `plan.md` → skim `docs/known_issues.md` for the libraries this
-phase touches.
+section in `plan.md` → `make kb-search Q="<phase's domain tags>"` (e.g. the
+library/technique names the phase touches — `boolean`, `hinges`, `stl`,
+...) and read every match. `docs/kb/` (see `docs/kb/README.md`) is the
+knowledge base; `docs/known_issues.md` is a pointer file into it now.
 
-**END**: rewrite `handoff.md` (never append); verify `artifacts/state.json`
-matches reality; append `changelog.md` if any decision changed; log any new
-OCC workaround in `docs/known_issues.md`.
+**BEFORE** implementing in an unfamiliar area, or before fighting any
+library/API for more than a few minutes: `make kb-search Q="<topic>"`
+first — a past session likely already paid this cost.
+
+**AT RESOLUTION** of anything non-obvious (a failed approach, an API
+surprise, a design rule just decided): write or update the relevant
+`docs/kb/*.md` entry IN THE SAME COMMIT as the fix, then `make kb-index`.
+A fight resolved without a KB entry is an incomplete fix.
+
+**END**: rewrite `handoff.md` (never append) — including its `## KB
+entries added/updated this session` line, empty is fine but the line must
+be present; verify `artifacts/state.json` matches reality; append
+`changelog.md` if any decision changed.
 
 ## Phase workflow
 
@@ -22,14 +34,20 @@ OCC workaround in `docs/known_issues.md`.
 2. Run/write the R0 probe for every third-party boundary the phase touches
    (`scripts/r0_probes/probe_<lib>.py`) — probes call the REAL installed
    library. If a probe contradicts the plan, STOP and update
-   `docs/r0_findings/<phase>.md` before writing implementation code.
+   `docs/r0_findings/<phase>.md` before writing implementation code. Once a
+   probe's finding is durable (not just "confirmed the plan," but a real
+   lesson a future phase would otherwise re-learn the hard way), distill it
+   into a `docs/kb/*.md` entry — the probe script/`r0_findings` stays as
+   raw evidence, the KB entry is what a future session actually reads.
 3. Implement.
 4. Run the phase gate: `make gate PHASE=p04`.
 5. Gate exit 0 → gate writes `artifacts/gates/pXX.json` → commit
    `"P04 DONE: <summary> [gate:pass]"` → proceed. Gate exit != 0 → fix and
    re-run. Never edit a gate to make it pass without logging why in
    `docs/gate_changes.md`.
-6. Run `make regress` before declaring the phase complete.
+6. Run `make regress` before declaring the phase complete (this also checks
+   `docs/kb/INDEX.md` freshness — fails loudly if a KB entry was added/
+   edited without `make kb-index`).
 7. Close the session per the protocol above.
 
 ## Hard rules
@@ -67,12 +85,17 @@ OCC workaround in `docs/known_issues.md`.
   failure or try to "fix" it. Judge success by the command's own exit code
   and output.
 - cadquery/OCP/gmsh need native libs on a bare Ubuntu workspace (libGL,
-  X11 cursor/render libs) — see `docs/known_issues.md` for the apt list.
+  X11 cursor/render libs) — see `docs/kb/libgl-libxcursor-missing-workspace.md`
+  for the apt list.
 
 ## Where things live
 
 - `docs/conventions.md` — units/frame/sign/naming conventions, single source of truth.
-- `docs/known_issues.md` — OCC workaround knowledge base (symptom → cause → workaround → phase).
+- `docs/kb/` — the knowledge base (durable lessons: OCC workarounds, design
+  rules, incidents, format specs). One card per concept; `docs/kb/README.md`
+  has the format; `docs/kb/INDEX.md` is generated (`make kb-index`); search
+  with `make kb-search Q="term"`. `docs/known_issues.md` is a pointer file
+  into this now — don't add new entries there.
 - `docs/decisions/ADR-*.md` — one record per post-kickoff pivot.
 - `docs/r0_findings/pXX.md` — per-phase probe results.
 - `docs/gate_changes.md` — any audited gate modification, with reason.

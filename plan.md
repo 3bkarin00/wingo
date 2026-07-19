@@ -117,6 +117,10 @@ appended) at the end of every session. Template:
 ## Next single action
 - <ONE concrete step, e.g. "implement cove revolution surface; R0 probe
   for BRepPrimAPI_MakeRevol is in docs/r0_findings/p04.md">
+## KB entries added/updated this session
+- <docs/kb/*.md filenames touched this session; empty is a valid answer,
+  but the line must be present — a KB card written without noting it here
+  is how the habit dies. See docs/kb/README.md.>
 ## Blockers / open questions
 - <only real ones; empty is a valid answer>
 ## Do not touch

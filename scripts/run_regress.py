@@ -9,9 +9,15 @@ swept into the regression run.
 Gate files are collected with Python's glob (NOT by handing a shell pattern
 to pytest). A subprocess call does no shell expansion, so passing the literal
 string "tests/gates/test_p00_*.py" makes pytest look for a file with a
-`*` in its name and exit 2 — see docs/known_issues.md. If a phase is marked
-passed in state.json but no gate file exists, that's a corrupt state / lost
-gate, so we fail LOUDLY rather than let an unmatched glob leak through.
+`*` in its name and exit 2 — see docs/kb/shell-glob-pytest-literal.md. If a
+phase is marked passed in state.json but no gate file exists, that's a
+corrupt state / lost gate, so we fail LOUDLY rather than let an unmatched
+glob leak through.
+
+Also checks docs/kb/INDEX.md freshness before running any gate (docs/kb/
+README.md's workflow: an entry added/updated without regenerating the index
+is a forgotten step, not a silent no-op) — fails loudly on drift, same
+posture as the missing-gate-file check above.
 """
 import json
 import subprocess
@@ -23,7 +29,17 @@ STATE_PATH = ROOT / "artifacts" / "state.json"
 GATES_DIR = ROOT / "tests" / "gates"
 
 
+def _check_kb_index() -> bool:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "kb_index.py"), "--check"], cwd=ROOT
+    )
+    return result.returncode == 0
+
+
 def main() -> int:
+    if not _check_kb_index():
+        return 1
+
     state = json.loads(STATE_PATH.read_text())
     gates_passed = state.get("gates_passed", [])
     if not gates_passed:

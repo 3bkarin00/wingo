@@ -729,3 +729,36 @@ meaningful change: what changed, why, and what it retired/added.
   device-window-edge ribs; rib/spar mutual notching; skin-midsurface
   ramp/cove-fidelity correction; gate battery extension beyond
   `te_half.yaml`.
+
+## 2026-07-19 — Knowledge base scaffolded (docs/kb/), wired into session protocol
+
+- Infrastructure-only session (own branch `kb-scaffold`, no geometry work)
+  requested to make durable project knowledge discoverable and self-
+  reinforcing instead of scattered across `docs/known_issues.md`,
+  `docs/r0_findings/*.md`, ADRs, `docs/gate_changes.md`, and tribal
+  knowledge in commit messages/tolerance-comment prose.
+- New `docs/kb/` — one markdown card per concept (frontmatter: title, tags,
+  source, phase, confidence, last_updated). Seeded 27 entries: all 4
+  `docs/known_issues.md` entries migrated verbatim (tag `incident`), plus
+  23 mined from `docs/r0_findings/`, ADR-001–005, `plan.md`'s Failure-Mode
+  Register (F1–F19), and one fresh lesson from this week's P9 gate work
+  (`cq.Shape.tessellate()` doesn't dedupe vertices across face boundaries —
+  a real false-manifold-failure trap). `docs/known_issues.md` is now a
+  pointer file, not deleted (history/links intact).
+- `scripts/kb_index.py` (`--write`/`--check`) is the single source of
+  truth for `docs/kb/INDEX.md` generation, used by both `make kb-index`
+  and `scripts/run_regress.py`'s new pre-check (fails loudly if the index
+  drifts from the entries on disk — same "corrupt state, don't silently
+  skip it" posture as the existing missing-gate-file check). `make
+  kb-search Q="term"` is a thin `grep -ri` wrapper across every entry's
+  frontmatter + body. Semantic (pgvector) search is explicitly Stage 2,
+  tracked as a TODO in `docs/kb/README.md`, not attempted here.
+- Wired into the actual workflow (the point of this session, not just the
+  scaffold): `CLAUDE.md`'s session protocol now says kb-search BEFORE
+  fighting an unfamiliar API, and write/update the KB entry IN THE SAME
+  COMMIT as the fix that resolved it — "a fight resolved without a KB
+  entry is an incomplete fix." `AGENTS.md` regenerated via `make
+  sync-agents` (never hand-edited). `handoff.md`'s template (plan.md §0.5)
+  and the current `handoff.md` both gained a `## KB entries added/updated
+  this session` line (empty allowed, must be present) so the habit stays
+  visible even on a session that added nothing.

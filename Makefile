@@ -9,10 +9,10 @@ ALEMBIC := $(VENV)/bin/alembic
 export DATABASE_URL ?= postgresql+psycopg://wingstructgen:wingstructgen@localhost:5432/wingstructgen
 export REDIS_URL ?= redis://localhost:6379/0
 
-.PHONY: help venv up down migrate seed probes gate regress sync-agents
+.PHONY: help venv up down migrate seed probes gate regress sync-agents kb-index kb-search
 
 help:
-	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress sync-agents"
+	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress sync-agents kb-index kb-search Q=\"term\""
 
 venv:
 	python3 -m venv $(VENV)
@@ -57,3 +57,23 @@ sync-agents:
 	  cat CLAUDE.md; \
 	} > AGENTS.md
 	@echo "AGENTS.md regenerated from CLAUDE.md"
+
+# Knowledge base (docs/kb/ — see docs/kb/README.md). kb-index regenerates
+# INDEX.md from every entry's frontmatter; staleness is also checked by
+# `make regress` (scripts/run_regress.py) so a forgotten INDEX.md rebuild
+# fails loudly rather than silently drifting from docs/kb/*.md.
+kb-index:
+	python3 scripts/kb_index.py --write
+
+kb-search:
+	@if [ -z "$(Q)" ]; then echo "usage: make kb-search Q=\"term\""; exit 1; fi
+	@found=0; \
+	for f in docs/kb/*.md; do \
+	  case "$$f" in */README.md|*/INDEX.md) continue ;; esac; \
+	  if grep -qi "$(Q)" "$$f"; then \
+	    found=1; \
+	    echo "--- $$f ---"; \
+	    grep -i --color=never -n "$(Q)" "$$f" | head -3; \
+	  fi; \
+	done; \
+	if [ "$$found" = "0" ]; then echo "no docs/kb/ entries match \"$(Q)\""; fi
