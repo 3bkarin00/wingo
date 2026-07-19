@@ -42,6 +42,12 @@ def set_done(session: Session, job_id: uuid.UUID) -> None:
     session.flush()
 
 
+def set_artifact_manifest(session: Session, job_id: uuid.UUID, manifest: dict) -> None:
+    job = session.get(JobRow, job_id)
+    job.artifact_manifest = manifest
+    session.flush()
+
+
 def set_failed(session: Session, job_id: uuid.UUID, checkpoint: dict | None = None) -> None:
     job = session.get(JobRow, job_id)
     job.status = JobStatus.FAILED.value

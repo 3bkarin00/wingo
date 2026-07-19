@@ -729,3 +729,175 @@ meaningful change: what changed, why, and what it retired/added.
   device-window-edge ribs; rib/spar mutual notching; skin-midsurface
   ramp/cove-fidelity correction; gate battery extension beyond
   `te_half.yaml`.
+
+## 2026-07-14 — P7 DONE: hinges (generated mode) gate passes [gate:pass]
+
+- New `backend/geometry/hinges.py`. Design R0-verified through 4 probe
+  rounds against `te_half.yaml` before writing the module (full trail:
+  docs/r0_findings/p07.md):
+  1. A wing-side LUG cannot be built as a subtraction result — CS's real
+     nose material reaches all the way to the true hinge-axis line itself
+     (measured: 100% inside `cs_solid`), so cutting a candidate blank
+     against `cs_solid` or `build_cove_offset_region` removes the entire
+     knuckle, not just the intended tab sliver.
+  2. Growing the lug's own construction PARAMETERS (cylinder radius, box
+     dims) to build a clearance notch does NOT reliably produce a
+     superset of the true fused shape — measured only 47% containment,
+     a box-corner/ruled-loft-faceting interaction near where the tab
+     crosses the nose arc's true boundary.
+  3. Fix: grow the lug's real `BoundingBox()` by margin in every global
+     axis direction (a provably-correct Minkowski-box guarantee,
+     independent of the lug's actual shape) to carve the notch out of a
+     DERIVED copy of `cs_solid` ("cs_notched" — the frozen P4 `cs_solid`
+     is never modified). Measured: 100% containment, clearance =
+     EXACTLY `gap_mm + 0.05mm` safety margin, real positive-volume bond
+     to the false spar (0.264mm³), both lug and tang holes coaxial to
+     0.00000mm against the true axis.
+  4. TANG (CS-side) is simple by comparison: `fuzzy_common(knuckle_blank,
+     cs_solid)` — the same "oversized blank → boolean → real trimmed
+     body" idiom `spar_trim.py` already established, since the knuckle
+     is, by the same R0 fact, entirely embedded in real CS material.
+- New tolerances (backend/tolerances.py, "Hinges, generated mode"
+  section): `HINGE_PIN_DIA_MM`, `HINGE_KNUCKLE_WALL_MM`,
+  `HINGE_KNUCKLE_LEN_MM`, `HINGE_KNUCKLE_AXIAL_GAP_MM`,
+  `HINGE_LUG_CLEARANCE_MARGIN_MM`, `HINGE_MOUNT_OVERLAP_MM` — each with a
+  derivation comment tying back to the R0-measured numbers above.
+- New `backend/geometry/booleans.coaxial_cylinder_axis_deviation` —
+  extends the existing `coaxial_cylinder_radii` (F4, direction-only)
+  idiom to check axis LINES actually coincide, not just parallel
+  directions; the actual P7 coaxiality check.
+- New `tests/gates/test_p07_hinges.py` — plan.md §9's P7 pass criteria:
+  hole coaxiality within `COAXIALITY_TOLERANCE_MM` (0.05mm) and lug/tang
+  clearance to the opposing body ≥ `gap_mm`. Documented reading for the
+  one ambiguous criterion ("lug/tang clearance to moving body"): checked
+  BOTH directions — lug→CS (the literal moving body) and tang→wing (the
+  fixed structure the tang must swing clear of; same static, at-rest
+  posture the plan's own P7 wording describes, P8 owns the full sweep).
+  Battery: `te_half.yaml` only, same cost-driven documented scope as P6.
+  Much cheaper than P6's gate (~200s per real build vs ~45-90 real
+  minutes) since hinges only need P4's device cut + iml.py's LOFTS, never
+  the full ~40-90min sandwich BODY construction.
+- First real-kernel gate run: 6/6 passed, no fixes needed — confirmatory
+  of the construction already verified through the 4-round probe trail
+  above, not exploratory. `worst_deviation_mm: 0.0` across 12 checked
+  cylindrical faces; `worst_lug_to_cs_mm: 5.05` (== gap_mm + safety
+  margin, exactly as designed). `artifacts/gates/p07.json` written
+  (pass=true); `artifacts/state.json` updated (`current_phase=p07`,
+  `gates_passed` now includes p07).
+- Wired into `scripts/export_viewer_data.py` (in-run re-verification of
+  coaxiality + clearance, matching every other P6/P7 construction
+  module's "verified, not assumed" posture) and `tools/viewer/app.js`
+  (new "Hinge lugs"/"Hinge tangs" dynamic toggle layers, sky-blue/
+  magenta, distinct from every existing P6 layer color).
+- **P7 (plan.md §9, "Hinges — generated mode") is DONE.** Deferred scope
+  (explicit, tracked, not forgotten): `hinges.mode: cots` (placeholder
+  pockets sized to `cots_pin_dia_mm`) — this phase's own title scopes to
+  generated mode only; the kinematic sweep-through-deflection check (P8's
+  own job, not a P7 criterion); hinge-land core ramp-out (D11) at the
+  lug/tang locations — now unblocked by real hinge placement but not yet
+  wired into iml.py's ramp logic; gate battery extension beyond
+  `te_half.yaml`.
+
+## 2026-07-15 — ADR-005: pin-and-tube hinges replace lug/tang; WP2/WP2b/WP2c specced
+
+- **ADR-005 accepted**: before P8 kickoff, the generated-mode hinge design
+  direction changed from P7's lug/tang knuckle pairs to a pin-and-tube
+  mechanism (WP1, `hinges_pin_tube.py` — alternating wing/CS tube segments
+  in bonded carriers, swept clearance pockets built as a union of rotated
+  copies through ±(max_deflection + margin), never a single revolve). Full
+  rationale: `docs/decisions/ADR-005-pin-and-tube-hinges.md`. Not a
+  technical failure of the lug/tang design — it passed its gate 6/6 and
+  was independently re-verified live this session via
+  `scripts/export_viewer_data.py` on a real build. Caught in the same
+  investigation: P7's lug/tang work (hinges.py, its gate, tolerances,
+  viewer wiring) had never actually been committed or pushed, despite a
+  prior handoff.md claiming otherwise — so this retirement happens before
+  any of it reaches git, not as a revert.
+- `artifacts/state.json` corrected: `p07` removed from `gates_passed`,
+  `current_phase` set back to `p06` — the P7 gate that passed no longer
+  corresponds to any construction in the tree (it verified lug/tang, which
+  is retired). `artifacts/gates/p07.json`/`p07_timings.json` left in place
+  as historical record of that run; will be overwritten by the new
+  pin-and-tube gate once it exists, not hand-edited.
+- **plan.md updated** (schema §6, D-table D23–D26, §8 pipeline steps 7-8,
+  §9 P6/P7 phase-scope text) with full specs for four new construction
+  modules, given as complete step-by-step recipes this session:
+  - **D23 / WP2 — spar shapes**: `spars[].shape` enum (`web` default,
+    unchanged code path; `c_channel`/`i_beam` swept/lofted caps;
+    `box` twin webs; `tube` lofted circular section). Introduces one
+    footprint function per shape — shared by rib cutouts and D25's slots.
+  - **D24 / WP2b — π-joint ribs** (`pi_joints.py`): rib skin-contact
+    segments offset inward for bond gap; π-section (base + 2 legs) swept
+    along the offset IML contact curve, trimmed clear of spar crossings.
+  - **D25 / WP2c — tab-and-slot interlock** (`interlock.py`): rib tabs
+    through matching spar-web slots, `web`/`c_channel`/`i_beam` crossings
+    only; `box`/`tube` crossings stay byte-identical to the pre-interlock
+    cutout (regression-locked). New schema: `structure.interlock`.
+  - **D26 / WP1 — pin-and-tube hinges** (ADR-005, above).
+  Real dependency/build order (differs from the WP-numbering):
+  **WP2 → WP2b → WP2c → WP1** — WP2c reuses WP2's footprint function and
+  needs WP2b's rib offsets done first; WP1 runs last because its pockets
+  cut the already-finished spar/rib/π bodies. A shared face-naming
+  CENTROID REGISTRY module (record expected centroid/normal/area/name per
+  bond face at creation, match against final post-boolean faces, hard-fail
+  on any unmatched entry) is used by all four.
+- None of WP1/WP2/WP2b/WP2c is implemented yet. Next step per the project's
+  own hard rules: R0-probe every named API (sweep-with-spine, offset-
+  curve-on-surface, XDE face naming) against the real installed
+  CadQuery/OCP before any construction code, same discipline as every
+  prior phase.
+
+## 2026-07-15 (later) — WP2/WP2b/WP2c + centroid registry implemented, real-kernel smoke-verified
+
+- **R0 probes all resolved** (docs/r0_findings/p06_ext.md, p07.md):
+  sweep-with-spine (both techniques work; sampled-frames+loft chosen),
+  offset-curve-on-surface (manual per-point normal offset, exact),
+  rotation-about-arbitrary-axis (cq.Shape.rotate accurate to 1.5e-14mm),
+  and XDE face naming — face-level names DO survive STEP round-trips, but
+  ONLY with `write.stepcaf.subshapes.name=1` / `read.stepcaf.subshapes.name=1`
+  (both default OFF; the params only register after a STEPCAF writer/reader
+  is constructed) and reading names via TCollection_AsciiString(...).ToCString().
+- **WP2 / D23** — new `backend/geometry/spars.py` (build_spar_bodies with
+  web/c_channel/i_beam/box/tube; `web` delegates to spar_trim verbatim);
+  `spar_footprint()` is the single clearance-parameterized source for rib
+  cutouts AND D25 slots (clearance grown in canonical 2D space before
+  placement — no offset2D orientation risk). Cap paths from ONE
+  BRepAlgoAPI_Section(spar shell ∩ cavity), split upper/lower, swept as
+  sampled-frame ruled lofts with per-point cavity normals. Schema: Spar.shape
+  + per-shape fields with cross-field validation; tube od validated ≤ 60%
+  local internal depth at 20 stations. ribs.py now cuts shape-dependent spar
+  cutouts (a full-height web cutout legitimately splits a rib into fore/aft
+  solids). `_spar_blank` gained `xc_offset_mm` (box twin webs). New
+  `fuzzy_fuse` in booleans.py. The recipe's optional "recessed cap mode"
+  (hardpoint-ramp band) is NOT implemented — no schema field was specced
+  for it; deferred until it gets one.
+- **WP2b / D24** — new `backend/geometry/pi_joints.py`. Rib skin-contact
+  segments offset inward by (PI_BASE_THICKNESS_MM + PI_BOND_GAP_MM) inside
+  build_ribs (D24 applies to every rib; π-section dims are tolerances.py
+  constants since §6 adds no π schema block). π preform bodies swept along
+  the ORIGINAL contact chains offset along the local IML normal, trimmed
+  clear of spar crossings. DELIBERATE DEVIATION from the recipe's "three
+  swept boxes and union": the π section is lofted as ONE simply-connected
+  12-corner polygon — identical geometry, zero fuse booleans, no F4 risk at
+  the base↔leg junctions. Leg inner faces land at exactly
+  rib_y ± (rib_t/2 + bond_gap) BY CONSTRUCTION (kernel-verified).
+- **WP2c / D25** — new `backend/geometry/interlock.py`. Interlocked
+  crossings replace the web cutout tool with (web prism − tab prisms); slots
+  cut from the real spar body (true prismatic intersection). Validation
+  collects violations across all crossings and rejects actionably —
+  first probe run proved it by correctly rejecting 2×6mm tabs on
+  minimal.yaml's thin rear spar (16mm usable height). Box/tube crossings and
+  per-rib overrides verified byte-identical/plain on the real kernel.
+- **Centroid registry** — new `backend/geometry/face_registry.py`
+  (record/match/write_step_with_names/read_step_names). Kernel-verified:
+  survives unrelated and piercing booleans, hard-fails naming the entry when
+  a boolean consumes a bond face, full STEP name round-trip through the
+  productionized XDE recipe.
+- All four verified by real-kernel smoke probes (scripts/r0_probes/
+  probe_{spar_shapes,pi_joints,interlock,face_registry}_verify.py) against a
+  stand-in OML cavity; the expensive real-cavity gate run is deliberately
+  deferred until WP1 lands so the invalidated sandwich cache is rebuilt once,
+  not per-WP. NOTE: editing tolerances.py/booleans.py/ribs.py/spar_trim.py
+  invalidates the P6 sandwich geometry cache by design (source-hash keying).
+- Still open: WP1 pin-and-tube construction (hinges_pin_tube.py), gate files,
+  regress.

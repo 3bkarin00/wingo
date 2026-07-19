@@ -9,10 +9,10 @@ ALEMBIC := $(VENV)/bin/alembic
 export DATABASE_URL ?= postgresql+psycopg://wingstructgen:wingstructgen@localhost:5432/wingstructgen
 export REDIS_URL ?= redis://localhost:6379/0
 
-.PHONY: help venv up down migrate seed probes gate regress sync-agents
+.PHONY: help venv up down migrate seed probes gate regress sync-agents run-api run-frontend
 
 help:
-	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress sync-agents"
+	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress sync-agents run-api run-frontend"
 
 venv:
 	python3 -m venv $(VENV)
@@ -49,6 +49,15 @@ gate:
 
 regress:
 	@$(PY) scripts/run_regress.py
+
+# P10 dev servers (tests/gates/test_p10_web_e2e.py spawns these itself for
+# the actual gate run — these targets are for a human driving the UI by
+# hand, e.g. while iterating on frontend/src/Viewer.tsx).
+run-api:
+	$(VENV)/bin/uvicorn backend.api.main:app --reload --host 127.0.0.1 --port 8000
+
+run-frontend:
+	cd frontend && npm run dev
 
 sync-agents:
 	@{ \
