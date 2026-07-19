@@ -1,0 +1,26 @@
+{
+  "phase": "p09",
+  "pass": true,
+  "metrics": {
+    "step_export": {
+      "te_half": {
+        "body_count": 2,
+        "names_verified": 4
+      }
+    },
+    "stl_manifold": {
+      "te_half": {
+        "wing": true,
+        "control_surface": true
+      }
+    },
+    "gltf_export": {
+      "te_half": {
+        "total_nodes": 3,
+        "named_body_nodes": 2,
+        "meshes": 2
+      }
+    }
+  },
+  "timestamp": "2026-07-19T08:10:08.144408+00:00"
+}

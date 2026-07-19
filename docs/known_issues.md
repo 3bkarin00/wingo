@@ -109,3 +109,24 @@ implementation (session protocol, CLAUDE.md).
   observation on this workspace is noise until the per-stage breakdown
   says otherwise.
 - Phase found: p06 (viewer-export integration of `backend/geometry/iml.py`).
+
+## cq.Shape.tessellate() doesn't dedupe vertices across face boundaries — a real watertight solid looks "non-manifold" to naive edge-count checks
+
+- Root cause: `cq.Shape.tessellate(tol)` concatenates each FACE's own
+  local `BRepMesh_IncrementalMesh` triangulation into one global
+  (vertices, triangles) pair WITHOUT merging coincident vertices at
+  shared face boundaries — two adjacent faces' triangulations each get
+  their OWN vertex indices for the same 3D point on their shared edge. A
+  naive "every edge (by vertex-index pair) must be shared by exactly 2
+  triangles" manifold check therefore sees every shared-face-boundary
+  edge as two DIFFERENT edges, each used only once, and reports a
+  false non-manifold failure — even on a solid P4's own gate already
+  proves watertight (found on te_half.yaml's `wing` body, P9 gate
+  development, `tests/gates/test_p09_export.py`).
+- Workaround: snap-merge tessellation vertices by rounded position
+  (round to 1e-4mm — tighter than `TESSELLATION_TOLERANCE_MM` so
+  genuinely distinct nearby vertices never wrongly merge, loose enough to
+  catch the exactly/near-coincident ones OCC's per-face tessellation
+  produces at a shared edge) BEFORE building the edge-adjacency map. See
+  `test_p09_export.py::_is_manifold_tessellation`.
+- Phase found: p09 (export gate, STL manifold-per-body check).
