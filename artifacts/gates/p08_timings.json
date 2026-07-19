@@ -1,0 +1,20 @@
+{
+  "te_half_build": {
+    "lofts_false_spar_s": 460.8062983760001,
+    "hinges": {
+      "stations_s": 6.794232459999876,
+      "cs_pockets_s": 185.56703344499965,
+      "false_spar_pockets_s": 119.99483426799998,
+      "access_bore_s": 7.409558862000267,
+      "face_match_s": 0.008862503999807814,
+      "total_s": 320.581408002
+    }
+  },
+  "te_half_sweep": {
+    "n_angles": 141,
+    "sweep_s": 1397.321097265999
+  },
+  "te_half_envelope": {
+    "envelope_s": 177.65712437400362
+  }
+}
