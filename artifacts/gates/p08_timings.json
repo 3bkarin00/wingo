@@ -1,20 +1,34 @@
 {
   "te_half_build": {
-    "lofts_false_spar_s": 460.8062983760001,
+    "lofts_false_spar_s": 468.2262756590062,
     "hinges": {
-      "stations_s": 6.794232459999876,
-      "cs_pockets_s": 185.56703344499965,
-      "false_spar_pockets_s": 119.99483426799998,
-      "access_bore_s": 7.409558862000267,
-      "face_match_s": 0.008862503999807814,
-      "total_s": 320.581408002
+      "stations_s": 6.8708239200059325,
+      "cs_pockets_s": 190.24994933199196,
+      "false_spar_pockets_s": 121.47164440598863,
+      "access_bore_s": 7.478377945997636,
+      "face_match_s": 0.009024914994370192,
+      "total_s": 326.91665398799523
     }
   },
   "te_half_sweep": {
     "n_angles": 141,
-    "sweep_s": 1397.321097265999
+    "sweep_s": 1421.4440458259924
   },
   "te_half_envelope": {
-    "envelope_s": 177.65712437400362
+    "envelope_s": 169.11551116900227
+  },
+  "te_half_te_cut": {
+    "station_data_s": 0.16832270399754634,
+    "loft_regions_s": 0.5323306179998326,
+    "aft_boxes_s": 0.007686976998229511,
+    "wing_cut_s": 30.580387261004944,
+    "cs_fuse_s": 0.6072506619966589,
+    "cs_common_s": 21.527007112003048,
+    "total_s": 53.4230014509958
+  },
+  "te_half_skin_sweep": {
+    "n_angles": 51,
+    "sweep_s": 446.9717363289965,
+    "n_points": 423
   }
 }

@@ -148,3 +148,25 @@ implementation (session protocol, CLAUDE.md).
   collision checks for skin-scale bodies — the swept-volume envelope test
   proves CONTINUOUS collision-freedom, strictly stronger than sampling.
 - Phase found: p08 (`tests/gates/test_p08_kinematics.py`).
+
+## Mac->remote rsync silently clobbers the remote's own gate artifacts/state.json
+
+- Root cause: every code-push rsync this session used `--exclude`s for
+  `.git`/`node_modules`/`.venv`/`artifacts/cache`/`frontend/node_modules`
+  but NOT `artifacts/` itself — so pushing a code fix to the remote
+  workspace also overwrote the remote's OWN `artifacts/state.json` and
+  `artifacts/gates/*.json` (written by real gate runs ON the remote) with
+  the Mac's stale local copies. Found empirically: P09's gate genuinely
+  passed and recorded itself in the remote's state.json, then a later
+  rsync (pushing the P8 kinematics.py fix) silently reverted
+  `gates_passed` to the Mac's older list, losing the record — the P8 run
+  that followed appended "p08" onto the STALE list, producing
+  `[p00,p01,p02,p03,p04,p06,p08]` with p07 and p09 both missing despite
+  p09 having actually passed.
+- Workaround: gate artifacts flow ONE DIRECTION ONLY — remote-generated,
+  pulled back to the Mac (git source of truth) after each real run, NEVER
+  pushed from Mac to remote. Every code-push rsync must
+  `--exclude='artifacts/'` (the whole tree, not just `artifacts/cache`).
+  Recovered here by re-running the (cheap, ~7s) P09 gate for a fresh
+  timestamped record rather than hand-patching the JSON.
+- Phase found: p08/p09 (this session's autonomous verification cycles).

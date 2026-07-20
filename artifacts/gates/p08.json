@@ -1,0 +1,30 @@
+{
+  "phase": "p08",
+  "pass": true,
+  "metrics": {
+    "sweep_collisions": {
+      "te_half": {
+        "n_angles": 141,
+        "collision_count": 0,
+        "worst_clearance_mm": 2.0
+      }
+    },
+    "clearance_floor": {
+      "te_half": {
+        "worst_clearance_mm": 4.9826,
+        "floor_mm": 4.95,
+        "monotonic_violations": []
+      }
+    },
+    "swept_volume_envelope": {
+      "te_half": {
+        "extremes_checked": [
+          25.0,
+          -25.0
+        ],
+        "worst_volume_mm3": 0
+      }
+    }
+  },
+  "timestamp": "2026-07-20T16:06:10.109671+00:00"
+}
