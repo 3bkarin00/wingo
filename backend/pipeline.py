@@ -92,12 +92,22 @@ def _stage(on_stage: "Callable[[str], None] | None", name: str) -> None:
 
 
 def _verify_solid_bodies(named_bodies: list[NamedBody]) -> None:
+    """`len(kept) >= 1`, NOT `== 1` — found empirically (P10's first real
+    job run): ribs and spars legitimately split into multiple DISCONNECTED
+    but individually watertight solids (a rib crossing a spar footprint, a
+    spar discontinued at a device window where the hinge/false-spar take
+    over structurally) — this is already-accepted, gate-verified behavior
+    (test_p06_sandwich.py's test_ribs_watertight_after_holes uses the same
+    `len(solids) >= 1` check; spar_trim.py's own module docstring states
+    the same for spars), not a construction defect. Requiring exactly one
+    solid here was stricter than the modules it wraps and rejected every
+    multi-piece rib/spar in a real te_half.yaml build."""
     bad = []
     for b in named_bodies:
         if b.role not in _SOLID_ROLES:
             continue
         kept, shards = filter_shards(b.shape)
-        if shards or len(kept) != 1 or not is_watertight(kept[0]):
+        if shards or not kept or not all(is_watertight(s) for s in kept):
             bad.append(f"{b.contract_name} (solids={len(kept)}, shards={len(shards)})")
     if bad:
         raise RuntimeError(f"pipeline: {len(bad)} body(s) failed watertight/shard check: {bad}")
