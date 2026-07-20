@@ -426,6 +426,22 @@ KINEMATIC_SWEPT_ENVELOPE_STEP_DEG = 2.0
 # that wouldn't generalize across configs).
 KINEMATIC_CLEARANCE_TOLERANCE_MM = 0.05
 
+# Proximity-cull margin for the skin-clearance distance sweep
+# (kinematics.proximity_face_subsets): static-body faces farther than this
+# from the moving body's rotation-swept bounding box are dropped before any
+# BRepExtrema call. Found the hard way (docs/known_issues.md):
+# BRepExtrema_DistShapeShape on the two FULL lofted skin solids (hundreds
+# of narrow ruled faces each) blew a 10-hour pytest budget mid-sweep — the
+# cull is what makes the per-angle distance computation tractable at all.
+# SOUNDNESS: the check asserts min clearance >= gap_mm - tolerance; a
+# culled face sits > margin away from every position of the moving body,
+# so with margin (25.0) > any configured gap_mm (5.0 across current
+# configs, 5x headroom) a culled face can never be the face that decides a
+# pass/fail at the floor — the assertion's outcome is identical to the
+# uncalled computation's, only the reported min can saturate at > margin,
+# which is still unambiguously a pass.
+KINEMATIC_PROXIMITY_CULL_MARGIN_MM = 25.0
+
 # --- Web UI E2E (P10, plan.md §9 P10 pass criteria) -------------------------
 
 # "compare a tracked vertex against server-computed position": the E2E gate

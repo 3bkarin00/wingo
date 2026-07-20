@@ -130,3 +130,21 @@ implementation (session protocol, CLAUDE.md).
   produces at a shared edge) BEFORE building the edge-adjacency map. See
   `test_p09_export.py::_is_manifold_tessellation`.
 - Phase found: p09 (export gate, STL manifold-per-body check).
+
+## BRepExtrema_DistShapeShape between two full lofted solids is intractable — proximity-cull to face subsets first
+
+- Root cause: min-distance between two complete lofted wing bodies
+  (hundreds of narrow ruled faces each, from 199-point section wires) at
+  141 sweep angles blew an entire 10-hour pytest budget mid-sweep (P8
+  gate, `test_clearance_floor_and_monotonic_trend`, 36,312s on the one
+  test). The extrema search scales with the face-pair product; nothing
+  about the per-call API misuse — the workload itself is the problem.
+- Workaround: cull the static body to faces whose bbox comes within
+  `KINEMATIC_PROXIMITY_CULL_MARGIN_MM` (25mm) of the moving body's
+  rotation-swept bbox before ANY distance call
+  (`kinematics.proximity_face_subsets` + `sweep_min_distance`). Sound for
+  a floor assertion at any floor < margin: a culled face can never decide
+  pass/fail (see the constant's derivation). Also drop per-angle boolean
+  collision checks for skin-scale bodies — the swept-volume envelope test
+  proves CONTINUOUS collision-freedom, strictly stronger than sampling.
+- Phase found: p08 (`tests/gates/test_p08_kinematics.py`).

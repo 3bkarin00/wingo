@@ -166,6 +166,94 @@ def sweep_collisions(
     return result
 
 
+def proximity_face_subsets(
+    static_body: cq.Shape,
+    moving_body: cq.Shape,
+    axis_p0: np.ndarray,
+    axis_dir: np.ndarray,
+    max_deflection_deg: float,
+) -> tuple[cq.Shape, cq.Shape, dict]:
+    """Cull the static body to only the faces whose bounding box comes
+    within KINEMATIC_PROXIMITY_CULL_MARGIN_MM of the moving body's
+    rotation-swept bounding box (union of its bboxes at -max/0/+max
+    deflection). Exists because BRepExtrema_DistShapeShape on two FULL
+    lofted skin solids is intractable — a real 10-hour gate timeout, see
+    the margin constant's derivation in tolerances.py and
+    docs/known_issues.md. Sound for a floor assertion at any
+    floor < margin: a culled face can never decide the result.
+
+    Returns (static_faces_compound, moving_faces_compound, stats). The
+    moving body keeps ALL its faces (it sits inside the static body's own
+    bbox neighborhood by construction — a symmetric cull would keep
+    everything anyway). Raises if the cull leaves nothing (would mean the
+    bodies are nowhere near each other — a caller/config bug, not a pass)."""
+    margin = tolerances.KINEMATIC_PROXIMITY_CULL_MARGIN_MM
+    a = cq.Vector(*axis_p0)
+    b = cq.Vector(*(axis_p0 + axis_dir))
+    boxes = [
+        moving_body.rotate(a, b, float(ang)).BoundingBox()
+        for ang in (-max_deflection_deg, 0.0, max_deflection_deg)
+    ]
+    lo = [min(bb.xmin for bb in boxes) - margin,
+          min(bb.ymin for bb in boxes) - margin,
+          min(bb.zmin for bb in boxes) - margin]
+    hi = [max(bb.xmax for bb in boxes) + margin,
+          max(bb.ymax for bb in boxes) + margin,
+          max(bb.zmax for bb in boxes) + margin]
+
+    kept = []
+    all_faces = static_body.Faces()
+    for f in all_faces:
+        fb = f.BoundingBox()
+        if (fb.xmax >= lo[0] and fb.xmin <= hi[0]
+                and fb.ymax >= lo[1] and fb.ymin <= hi[1]
+                and fb.zmax >= lo[2] and fb.zmin <= hi[2]):
+            kept.append(f)
+    if not kept:
+        raise ValueError(
+            "proximity_face_subsets: cull kept 0 static faces — moving body's swept "
+            "bbox is nowhere near the static body (caller/config bug)"
+        )
+    stats = {"static_faces_total": len(all_faces), "static_faces_kept": len(kept),
+             "moving_faces": len(moving_body.Faces()), "margin_mm": margin}
+    return (
+        cq.Compound.makeCompound(kept),
+        cq.Compound.makeCompound(moving_body.Faces()),
+        stats,
+    )
+
+
+def sweep_min_distance(
+    static_faces: cq.Shape,
+    moving_faces: cq.Shape,
+    axis_p0: np.ndarray,
+    axis_dir: np.ndarray,
+    max_deflection_deg: float,
+) -> SweepResult:
+    """Distance-ONLY sweep over sweep_angles (no per-angle boolean): min
+    distance between the two face sets at every sample angle. Collision
+    checking deliberately lives elsewhere — for skin-level bodies the
+    swept-volume envelope (envelope_clear_of_wing) already proves
+    CONTINUOUS collision-freedom, strictly stronger than any per-angle
+    sample, so paying a boolean per angle here would re-verify less at
+    enormous cost (the same 10-hour-timeout incident that motivated
+    proximity_face_subsets). Returns a SweepResult whose samples carry
+    collision_volume_mm3=0.0 placeholders so monotonic_clearance_violations
+    consumes it unchanged."""
+    t0 = time.perf_counter()
+    a = cq.Vector(*axis_p0)
+    b = cq.Vector(*(axis_p0 + axis_dir))
+    result = SweepResult()
+    for ang in sweep_angles(max_deflection_deg):
+        rotated = moving_faces.rotate(a, b, float(ang))
+        result.samples.append(AngleSample(
+            angle_deg=float(ang), collision_volume_mm3=0.0,
+            min_clearance_mm=_min_distance(rotated, static_faces),
+        ))
+    result.timings_s["total_s"] = time.perf_counter() - t0
+    return result
+
+
 def swept_envelope(
     bodies: list[cq.Shape], axis_p0: np.ndarray, axis_dir: np.ndarray, angle_extreme_deg: float,
 ) -> cq.Shape:

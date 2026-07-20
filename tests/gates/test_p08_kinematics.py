@@ -56,7 +56,13 @@ from backend import tolerances
 from backend.geometry.false_spar import build_false_spar
 from backend.geometry.hinges_pin_tube import PinTubeHingeSet, build_pin_tube_hinges
 from backend.geometry.iml import build_sandwich_lofts
-from backend.geometry.kinematics import envelope_clear_of_wing, monotonic_clearance_violations, sweep_collisions
+from backend.geometry.kinematics import (
+    envelope_clear_of_wing,
+    monotonic_clearance_violations,
+    proximity_face_subsets,
+    sweep_collisions,
+    sweep_min_distance,
+)
 from backend.geometry.loft import build_oml
 from backend.geometry.sections import build_planform_sections
 from backend.geometry.te_cut import (
@@ -200,21 +206,30 @@ def test_clearance_floor_and_monotonic_trend(p8_result, gate_metrics):
     cs_skin) — a real, independent, full-resolution re-verification of the
     SAME claim P4 only spot-checked analytically at a few angles, which is
     exactly what makes P8 "the decisive R1 gate" rather than a P4 re-run.
-    Cheap (1 body pair, not ~40+) even at full sweep_angles resolution, so
-    reruns fresh rather than reusing test_sweep_zero_collisions's result."""
+    SECOND empirical lesson (this test's own first full run): sweeping the
+    FULL skin solids is intractable — BRepExtrema_DistShapeShape between
+    two complete lofted bodies (hundreds of narrow ruled faces each) blew
+    the entire 10-hour budget mid-sweep (docs/known_issues.md). Now runs
+    on PROXIMITY-CULLED face subsets (kinematics.proximity_face_subsets —
+    sound for a floor assertion, see KINEMATIC_PROXIMITY_CULL_MARGIN_MM's
+    derivation) via the distance-only sweep_min_distance: per-angle skin
+    COLLISION sampling is deliberately absent because
+    test_swept_volume_envelope_clear already proves CONTINUOUS
+    collision-freedom for these bodies — strictly stronger than any
+    per-angle boolean, at none of the cost."""
     r, stem = p8_result, p8_result.stem
     max_defl = r.config.te_surface.max_deflection_deg
     t0 = time.perf_counter()
-    result = sweep_collisions(
-        [r.wing_skin], [r.cs_skin], r.hinge_set.axis_p0, r.hinge_set.axis_dir, max_defl,
+    wing_faces, cs_faces, cull_stats = proximity_face_subsets(
+        r.wing_skin, r.cs_skin, r.hinge_set.axis_p0, r.hinge_set.axis_dir, max_defl,
+    )
+    result = sweep_min_distance(
+        wing_faces, cs_faces, r.hinge_set.axis_p0, r.hinge_set.axis_dir, max_defl,
     )
     sweep_s = time.perf_counter() - t0
-    _write_timings(f"{stem}_skin_sweep", {"n_angles": len(result.samples), "sweep_s": sweep_s})
-
-    assert result.collision_count == 0, (
-        f"{stem}: wing/CS skin collide at {result.collision_count} sample angle(s): "
-        f"{[s.angle_deg for s in result.samples if s.collision_volume_mm3 > 0]}"
-    )
+    _write_timings(f"{stem}_skin_sweep", {
+        "n_angles": len(result.samples), "sweep_s": sweep_s, "cull": cull_stats,
+    })
 
     gap_mm = r.config.te_surface.gap_mm
     floor_mm = gap_mm - tolerances.KINEMATIC_CLEARANCE_TOLERANCE_MM
