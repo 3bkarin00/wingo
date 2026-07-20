@@ -31,6 +31,16 @@ export default function App() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  // ?job=<uuid> loads an already-built job directly (skips the build
+  // flow) — a real, shareable-URL feature, and also what made isolating
+  // a client-side glTF-loading bug tractable without re-paying a real
+  // job's full build cost every time (P10 gate development).
+  useEffect(() => {
+    const existingId = new URLSearchParams(window.location.search).get("job");
+    if (!existingId) return;
+    getJob(existingId).then(setJob).catch((e) => setError(String(e)));
+  }, []);
+
   const submit = async () => {
     setError(null);
     setJob(null);

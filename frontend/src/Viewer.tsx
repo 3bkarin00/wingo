@@ -30,6 +30,22 @@ declare global {
   }
 }
 
+// three.js's GLTFLoader internally sanitizes every loaded object's `.name`
+// via its own PropertyBinding.sanitizeNodeName — it uses "/" as an
+// animation-track path separator internally, so any "/" in a glTF node's
+// declared name is stripped before the Object3D is created. Found
+// empirically (P10 gate development): the exported glTF JSON correctly
+// has our full naming-contract string (SEG-C/BODY-x/ROLE-y, verified by
+// inspecting the raw file), but the LOADED three.js object ends up named
+// "SEG-CBODY-xROLE-y" — an exact getObjectByName(contractName) lookup can
+// therefore never match anything. This is a pure client-side lookup
+// mismatch, not a naming-contract or exporter problem (STEP/DXF/report
+// all still use the real "/"-bearing contract name) — normalize both
+// sides of the comparison the same way instead of changing the contract.
+function stripSlashes(name: string): string {
+  return name.replace(/\//g, "");
+}
+
 function findFirstMesh(root: THREE.Object3D): THREE.Mesh | null {
   if ((root as THREE.Mesh).isMesh) return root as THREE.Mesh;
   let found: THREE.Mesh | null = null;
@@ -81,9 +97,20 @@ export default function Viewer({ jobId, manifest }: Props) {
       artifactUrl(jobId, manifest.artifacts.gltf),
       (gltf) => {
         scene.add(gltf.scene);
+        const bySanitizedName = new Map<string, THREE.Object3D>();
+        gltf.scene.traverse((o) => {
+          // First object seen for a given sanitized name wins — the
+          // wrapping node/first primitive, whichever three.js assigned
+          // the UN-suffixed name to (a body whose tessellation produced
+          // multiple glTF primitives gets "_1", "_2", ... siblings from
+          // three.js's own de-duplication, which we deliberately don't
+          // index here: toggling/rotating the first-matched object is
+          // what the naming contract's per-BODY granularity means).
+          if (o.name && !bySanitizedName.has(o.name)) bySanitizedName.set(o.name, o);
+        });
         const nodes = new Map<string, THREE.Object3D>();
         for (const b of manifest.bodies) {
-          const obj = gltf.scene.getObjectByName(b.contract_name);
+          const obj = bySanitizedName.get(stripSlashes(b.contract_name));
           if (obj) nodes.set(b.contract_name, obj);
         }
         nodesRef.current = nodes;

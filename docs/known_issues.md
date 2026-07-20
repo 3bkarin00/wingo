@@ -170,3 +170,25 @@ implementation (session protocol, CLAUDE.md).
   Recovered here by re-running the (cheap, ~7s) P09 gate for a fresh
   timestamped record rather than hand-patching the JSON.
 - Phase found: p08/p09 (this session's autonomous verification cycles).
+
+## three.js GLTFLoader strips '/' from every loaded object's .name — exact-match lookups against the naming contract silently fail
+
+- Root cause: GLTFLoader internally sanitizes node/mesh names via
+  `PropertyBinding.sanitizeNodeName` — three.js uses `/` as an animation-
+  track path separator internally, so any `/` in a glTF node's declared
+  name is stripped before the `Object3D` is created. Confirmed directly
+  (P10 gate development): the exported glTF JSON genuinely has the full
+  contract-name string (`SEG-C/BODY-x/ROLE-y`, verified by reading the raw
+  file on the server), but the LOADED three.js object's `.name` is
+  `SEG-CBODY-xROLE-y` — `getObjectByName(contractName)` therefore never
+  matches anything, and the viewer silently shows zero bodies (no thrown
+  exception; GLTFLoader's own load succeeds fine).
+- Workaround: normalize both sides of the comparison client-side
+  (`stripSlashes()` in `frontend/src/Viewer.tsx`) — build a lookup keyed
+  by the object's OWN (sanitized) `.name` via one `traverse()`, then look
+  up each manifest body by its contract name with the same slash-stripping
+  applied. Never change the naming CONTRACT itself (docs/conventions.md —
+  STEP/DXF/report all still use the real `/`-bearing string); this is a
+  presentation-layer lookup fix only, confined to the glTF/three.js path.
+- Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
+  `scripts/r0_probes/probe_gltf_slash_names.py`).
