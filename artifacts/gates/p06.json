@@ -36,12 +36,12 @@
         },
         {
           "y_mm": 220.00000000000003,
-          "has_hole": true,
+          "has_hole": false,
           "ok": true
         },
         {
           "y_mm": 440.00000000000006,
-          "has_hole": false,
+          "has_hole": true,
           "ok": true
         },
         {
@@ -51,12 +51,12 @@
         },
         {
           "y_mm": 1140.0,
-          "has_hole": true,
+          "has_hole": false,
           "ok": true
         },
         {
           "y_mm": 1200.0,
-          "has_hole": true,
+          "has_hole": false,
           "ok": true
         }
       ]
@@ -89,9 +89,76 @@
         "violations": 0
       }
     },
+    "d23_shape_variants": {
+      "te_half/box": {
+        "volume_mm3": 92449.5,
+        "web_volume_mm3": 33811.4
+      },
+      "te_half/c_channel": {
+        "volume_mm3": 70573.4,
+        "web_volume_mm3": 33811.4
+      },
+      "te_half/i_beam": {
+        "volume_mm3": 70505.8,
+        "web_volume_mm3": 33811.4
+      },
+      "te_half/tube": {
+        "volume_mm3": 46610.7,
+        "web_volume_mm3": 33811.4
+      }
+    },
     "slow_tier_fresh_build": {
       "te_half": "pass"
+    },
+    "shape_coverage": {
+      "te_half": {
+        "eligible": [
+          1,
+          2
+        ],
+        "n_rib_planes": 7
+      }
+    },
+    "tab_slot_fit": {
+      "te_half": {
+        "worst_intersection_mm3": 0.0
+      }
+    },
+    "tab_protrusion_naming": {
+      "te_half": {
+        "tab_faces_named": 16,
+        "slot_faces_matched": 8
+      }
+    },
+    "slot_margins": {
+      "te_half": "all eligible crossings within edge_margin_mm"
+    },
+    "pi_rib_interlock": {
+      "te_half": {
+        "segments": 28,
+        "worst_overlap_mm3": 0.0
+      }
+    },
+    "pi_leg_bond_gap": {
+      "te_half": {
+        "bond_gap_mm": 0.2,
+        "leg_in_mm": 0.5,
+        "segments_checked": 28
+      }
+    },
+    "zero_interference": {
+      "te_half": "pass"
+    },
+    "override": {
+      "te_half": {
+        "overridden_index": 1
+      }
+    },
+    "naming_step_roundtrip": {
+      "te_half": {
+        "names_verified": 18
+      }
     }
   },
-  "timestamp": "2026-07-12T20:35:14.383772+00:00"
+  "timestamp": "2026-07-20T18:01:40.388137+00:00"
 }

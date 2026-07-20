@@ -1,29 +1,29 @@
 {
   "te_half_te_cut": {
-    "station_data_s": 0.16854692599736154,
-    "loft_regions_s": 0.5618036079686135,
-    "aft_boxes_s": 0.0068751099752262235,
-    "wing_cut_s": 31.172438199981116,
-    "cs_fuse_s": 0.6515264509944245,
-    "cs_common_s": 22.202753213990945,
-    "total_s": 54.76395637402311
+    "station_data_s": 0.16920050299086142,
+    "loft_regions_s": 0.6084802219993435,
+    "aft_boxes_s": 0.0073017329996218905,
+    "wing_cut_s": 32.193156253997586,
+    "cs_fuse_s": 0.6888176779903006,
+    "cs_common_s": 23.212579478000407,
+    "total_s": 56.879551723002805
   },
   "te_half": {
     "lofts_s": {
-      "offset_wires_s": 0.12872355000581592,
-      "lofts_s": 5.608666399028152,
-      "cove_fidelity_s": 119.49620558798779,
-      "parting_solid_s": 0.09847114601870999
+      "offset_wires_s": 0.1343267649936024,
+      "lofts_s": 5.85134615500283,
+      "cove_fidelity_s": 123.33093499300594,
+      "parting_solid_s": 0.09988791700743604
     },
     "body_s": {
-      "face_outer_cut_s": 51.59066540503409,
-      "core_ring_s": 199.36040285904892,
-      "face_inner_ring_s": 330.5048710239935,
-      "face_outer_split_s": 39.77355018304661,
-      "core_split_s": 52.416168555035256,
-      "face_inner_split_s": 57.46275746601168,
-      "hollow_common_s": 62.93179115199018
+      "face_outer_cut_s": 52.60110925800109,
+      "core_ring_s": 200.1594473389996,
+      "face_inner_ring_s": 329.3723061519995,
+      "face_outer_split_s": 39.704252217008616,
+      "core_split_s": 52.26414308798849,
+      "face_inner_split_s": 57.008821675000945,
+      "hollow_common_s": 62.33896543699666
     },
-    "total_s": 919.3831547549926
+    "total_s": 922.8812551349984
   }
 }
