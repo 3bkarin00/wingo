@@ -48,6 +48,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cadquery as cq
+import numpy as np
 import pytest
 import yaml
 from geometry_cache import get_or_build_shapes
@@ -59,9 +60,8 @@ from backend.geometry.iml import build_sandwich_lofts
 from backend.geometry.kinematics import (
     envelope_clear_of_wing,
     monotonic_clearance_violations,
-    proximity_face_subsets,
     sweep_collisions,
-    sweep_min_distance,
+    sweep_min_distance_by_points,
 )
 from backend.geometry.loft import build_oml
 from backend.geometry.sections import build_planform_sections
@@ -195,40 +195,45 @@ def test_clearance_floor_and_monotonic_trend(p8_result, gate_metrics):
     deflected) clearance, not a hinge-hardware fit. Found empirically
     (first version of this test): sweeping the SAME hardware groupings
     test_sweep_zero_collisions uses makes `worst_clearance_mm` measure the
-    wing_tube<->cs_tube AXIAL gap instead — those two cylinders sit on the
-    rotation axis itself, so rotating cs_tube about that axis changes
-    NOTHING about its distance to wing_tube (a cylinder rotated about its
-    own axis is invariant), and the sweep reports a constant
-    HINGE_AXIAL_GAP_MM=2.0mm at every single angle — a real, by-design,
-    unrelated mechanical clearance (tolerances.py's own derivation:
-    "unrelated to the chordwise device gap_mm"), not this criterion's
-    target at all. This test instead sweeps the SKIN bodies (wing_skin vs
-    cs_skin) — a real, independent, full-resolution re-verification of the
-    SAME claim P4 only spot-checked analytically at a few angles, which is
-    exactly what makes P8 "the decisive R1 gate" rather than a P4 re-run.
-    SECOND empirical lesson (this test's own first full run): sweeping the
-    FULL skin solids is intractable — BRepExtrema_DistShapeShape between
-    two complete lofted bodies (hundreds of narrow ruled faces each) blew
-    the entire 10-hour budget mid-sweep (docs/known_issues.md). Now runs
-    on PROXIMITY-CULLED face subsets (kinematics.proximity_face_subsets —
-    sound for a floor assertion, see KINEMATIC_PROXIMITY_CULL_MARGIN_MM's
-    derivation) via the distance-only sweep_min_distance: per-angle skin
-    COLLISION sampling is deliberately absent because
-    test_swept_volume_envelope_clear already proves CONTINUOUS
-    collision-freedom for these bodies — strictly stronger than any
-    per-angle boolean, at none of the cost."""
+    wing_tube<->cs_tube AXIAL gap instead (rotation-invariant about its
+    own axis) — a real, by-design, unrelated mechanical clearance, not
+    this criterion's target.
+
+    TWO further attempts at a body-level check both hit pytest-timeout's
+    10-HOUR budget: a raw compound-vs-compound BRepExtrema between the
+    full skin solids, then again between proximity-culled face subsets
+    (kinematics.proximity_face_subsets — the cull didn't shrink the
+    workload enough at these body sizes; kept as a general utility, not
+    what this test uses). THIRD approach, adopted here: the exact
+    technique test_p04_te_cut.py's own test_cove_clearance_at_rest_and_
+    deflected already uses at 2 angles — point-to-SHELL BRepExtrema
+    (vertex operand, O(1) cheap) against the moving body's own vertices,
+    extended across a full angle sweep
+    (kinematics.sweep_min_distance_by_points). Still a REAL measurement
+    against REAL built geometry, never a re-derivation of the construction
+    formula — just architecturally the right tool (point-location query,
+    not many-face proximity search).
+
+    ANGLE SET: coarse-only (KINEMATIC_COARSE_STEP_DEG, ~51 angles for
+    ±25°), not the full fine+coarse sweep_angles() the collision/envelope
+    tests use. F9's fine-step rationale is "a coarse-only COLLISION sweep
+    can step over a fleeting hit between samples" — this isn't a
+    collision search, it's confirming a clearance that is, BY
+    CONSTRUCTION (ADR-002/003, COVE_CLEARANCE_MM's own derivation: "an
+    exact, deflection-invariant offset regardless of deflection angle"),
+    expected to be flat across the whole sweep — there is no fleeting dip
+    for a finer step to catch that a coarse one would miss."""
     r, stem = p8_result, p8_result.stem
     max_defl = r.config.te_surface.max_deflection_deg
-    t0 = time.perf_counter()
-    wing_faces, cs_faces, cull_stats = proximity_face_subsets(
-        r.wing_skin, r.cs_skin, r.hinge_set.axis_p0, r.hinge_set.axis_dir, max_defl,
+    coarse_angles = np.arange(-max_defl, max_defl + 1e-9, tolerances.KINEMATIC_COARSE_STEP_DEG)
+    coarse_angles = np.unique(np.round(np.concatenate([coarse_angles, [0.0, -max_defl, max_defl]]), 6))
+
+    result = sweep_min_distance_by_points(
+        r.cs_skin, r.wing_skin, r.hinge_set.axis_p0, r.hinge_set.axis_dir, coarse_angles,
     )
-    result = sweep_min_distance(
-        wing_faces, cs_faces, r.hinge_set.axis_p0, r.hinge_set.axis_dir, max_defl,
-    )
-    sweep_s = time.perf_counter() - t0
     _write_timings(f"{stem}_skin_sweep", {
-        "n_angles": len(result.samples), "sweep_s": sweep_s, "cull": cull_stats,
+        "n_angles": len(result.samples), "sweep_s": result.timings_s["total_s"],
+        "n_points": result.timings_s["n_points"],
     })
 
     gap_mm = r.config.te_surface.gap_mm

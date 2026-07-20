@@ -126,6 +126,73 @@ def _min_distance(a: cq.Shape, b: cq.Shape) -> float:
     return op.Value() if op.IsDone() else float("nan")
 
 
+def _rotate_points(points: np.ndarray, axis_p0: np.ndarray, axis_dir: np.ndarray, angle_deg: float) -> np.ndarray:
+    """Vectorized rotate_point (module docstring's Rodrigues' formula) for
+    an (N,3) point array — same math, no per-point Python loop."""
+    axis = axis_dir / np.linalg.norm(axis_dir)
+    theta = np.radians(angle_deg)
+    v = points - axis_p0
+    v_rot = (
+        v * np.cos(theta)
+        + np.cross(axis, v) * np.sin(theta)
+        + axis * (v @ axis)[:, None] * (1 - np.cos(theta))
+    )
+    return axis_p0 + v_rot
+
+
+def _point_to_shell_distance(point: np.ndarray, shell: cq.Shape) -> float:
+    """Single point -> shape distance via BRepExtrema with a VERTEX operand
+    — O(1) cheap (point-location query), unlike compound-vs-compound
+    extrema between two many-face bodies, which is intractable at skin-
+    body face counts (two independent 10-hour timeouts finding this out
+    the hard way, docs/known_issues.md). Identical technique to
+    test_p04_te_cut.py's own `_point_to_shell_distance`, reused here
+    rather than re-derived."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.gp import gp_Pnt
+
+    vertex = BRepBuilderAPI_MakeVertex(gp_Pnt(*point)).Vertex()
+    op = BRepExtrema_DistShapeShape(vertex, shell.wrapped)
+    op.Perform()
+    return op.Value() if op.IsDone() else float("nan")
+
+
+def sweep_min_distance_by_points(
+    moving_shape: cq.Shape,
+    static_shape: cq.Shape,
+    axis_p0: np.ndarray,
+    axis_dir: np.ndarray,
+    angles: np.ndarray,
+    vertex_stride: int = 3,
+) -> SweepResult:
+    """Point-sample distance sweep: extracts `moving_shape`'s topological
+    VERTICES once (subsampled every `vertex_stride`-th, matching
+    test_p04_te_cut.py's own [::3] convention — these are lofted/ruled
+    solids with a vertex at every station's polygon corner, not a full
+    tessellation mesh, so this is a real, bounded-size point set), rotates
+    them with pure-numpy Rodrigues' formula (cheap — no OCC per angle),
+    and measures point-to-shell distance against `static_shape`'s own
+    shell at every angle. A REAL measurement against REAL built geometry
+    (never re-deriving the construction formula) — just architecturally
+    different from a compound-vs-compound extrema, which is what made the
+    first two attempts at this check time out at 10 hours each (see
+    sweep_min_distance's own docstring and docs/known_issues.md)."""
+    t0 = time.perf_counter()
+    pts = np.array([v.toTuple() for v in moving_shape.Vertices()][::vertex_stride], dtype=float)
+    static_shell = static_shape.Shells()[0] if static_shape.Shells() else static_shape
+
+    result = SweepResult()
+    for ang in angles:
+        rotated = _rotate_points(pts, axis_p0, axis_dir, float(ang))
+        worst = min(_point_to_shell_distance(p, static_shell) for p in rotated)
+        result.samples.append(AngleSample(
+            angle_deg=float(ang), collision_volume_mm3=0.0, min_clearance_mm=worst,
+        ))
+    result.timings_s["total_s"] = time.perf_counter() - t0
+    result.timings_s["n_points"] = len(pts)
+    return result
+
+
 def sweep_collisions(
     wing_bodies: list[cq.Shape],
     cs_bodies: list[cq.Shape],
