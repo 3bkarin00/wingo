@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from pathlib import Path
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -140,7 +141,19 @@ def get_artifact(job_id: uuid.UUID, filename: str) -> FileResponse:
             raise HTTPException(status_code=404, detail="artifacts not ready")
         manifest = row.artifact_manifest
 
-    allowed = {manifest["artifacts"].get("gltf"), manifest["artifacts"].get("step")}
+    gltf_name = manifest["artifacts"].get("gltf")
+    allowed = {gltf_name, manifest["artifacts"].get("step")}
+    if gltf_name:
+        # cq.Assembly.export(..., exportType="GLTF") writes a SIDECAR
+        # binary buffer file alongside the .gltf JSON (glTF 2.0's own
+        # external-buffer convention, same basename + .bin) that three.js's
+        # GLTFLoader fetches separately after parsing the JSON — found
+        # empirically (P10 gate's 4th real run): the manifest only ever
+        # tracked the .gltf name itself, so this allowlist rejected the
+        # sidecar the browser genuinely needs, and the model silently
+        # failed to load (0 body nodes, no exception surfaced past
+        # GLTFLoader's own onError callback).
+        allowed.add(str(Path(gltf_name).with_suffix(".bin")))
     allowed |= set((manifest["artifacts"].get("stl") or {}).values())
     allowed.discard(None)
     if filename not in allowed:
