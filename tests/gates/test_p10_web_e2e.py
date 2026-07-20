@@ -116,11 +116,22 @@ def frontend_server(api_server):
     produced a real "Connection refused" against a server that had
     genuinely started, just not on the checked address. Calling vite
     directly with ONE unambiguous `--port` and an explicit
-    `--host 127.0.0.1` sidesteps both."""
+    `--host 127.0.0.1` sidesteps both.
+
+    Also sets VITE_PROXY_TARGET=API_BASE — found empirically (this gate's
+    2nd real run, after the invocation fix above): vite.config.ts's /api
+    proxy defaulted to the `make run-api` convenience port (8000), not
+    this gate's own deliberately-different API_PORT (8731, chosen to
+    avoid colliding with a human's own dev session) — every /api/* fetch
+    from the browser silently failed against the wrong port (empty
+    config dropdown, no thrown exception to surface it). vite.config.ts's
+    own docstring has the full story."""
     vite_bin = REPO_ROOT / "frontend" / "node_modules" / ".bin" / "vite"
+    env = dict(os.environ)
+    env["VITE_PROXY_TARGET"] = API_BASE
     proc = subprocess.Popen(
         [str(vite_bin), "--port", str(FRONTEND_PORT), "--strictPort", "--host", "127.0.0.1"],
-        cwd=str(REPO_ROOT / "frontend"),
+        cwd=str(REPO_ROOT / "frontend"), env=env,
     )
     try:
         _wait_for(FRONTEND_BASE, 60.0, "Vite dev server")
@@ -146,12 +157,23 @@ def shared_page(frontend_server, browser):
 
 
 @pytest.fixture(scope="session")
-def built_job(shared_page):
+def built_job(shared_page, frontend_server):
     """Drives the full scripted run ONCE per session (module docstring's
     cost note — every other test in this file reuses the resulting job/page
     state rather than re-submitting): navigate -> select te_half -> Build
     -> progress events observed -> status reaches done. Returns the job id
-    the frontend ended up with, read straight from window.__wingE2E."""
+    the frontend ended up with, read straight from window.__wingE2E.
+
+    `frontend_server` MUST be an explicit fixture parameter here (found
+    empirically, this gate's 2nd real run): referencing the bare name
+    `frontend_server` without declaring it resolves to the module-level
+    FUNCTION OBJECT (the fixture definition itself), not its resolved
+    yielded URL — Playwright's `Page.goto` then fails trying to
+    JSON-serialize a FixtureFunctionDefinition. `shared_page` already
+    depends on `frontend_server` transitively, but pytest fixture
+    resolution doesn't expose a dependency's own dependencies by name —
+    every value actually used in a fixture body must be its own declared
+    parameter."""
     shared_page.goto(frontend_server)
     shared_page.select_option('[data-testid="config-select"]', CONFIG_NAME)
 
