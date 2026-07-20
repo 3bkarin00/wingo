@@ -199,8 +199,21 @@ def built_job(shared_page, frontend_server):
         f"({seen_stages}) — expected multiple (module docstring: 'progress events received')"
     )
 
-    job_id = shared_page.evaluate("window.__wingE2E && window.__wingE2E.jobId")
-    assert job_id, "window.__wingE2E.jobId missing after job completion — model did not load"
+    # The status TEXT flips to "done" the instant the WS message arrives
+    # (App.tsx's setProgress), but mounting <Viewer> (which sets
+    # window.__wingE2E) waits on a SEPARATE async getJob() refetch first —
+    # found empirically (this gate's 3rd real run, first to actually reach
+    # "done"): asserting on window.__wingE2E immediately after observing
+    # the status text raced that refetch + React re-render + glTF
+    # component mount. Poll for it with its own short, separate deadline
+    # rather than assuming it's instantaneous.
+    job_id = None
+    for _ in range(30):
+        job_id = shared_page.evaluate("window.__wingE2E && window.__wingE2E.jobId")
+        if job_id:
+            break
+        time.sleep(1.0)
+    assert job_id, "window.__wingE2E.jobId missing 30s after status reached done — model did not load"
     return job_id
 
 
