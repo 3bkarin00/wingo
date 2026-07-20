@@ -18,19 +18,32 @@
         "tolerance_mm": 0.05
       }
     },
-    "lug_tang_clearance": {
+    "carrier_bond_gaps": {
       "te_half": {
-        "gap_mm": 5.0,
-        "worst_lug_to_cs_mm": 5.05,
-        "worst_tang_to_wing_mm": 12.3437
+        "target_mm": 0.2,
+        "worst_wing_mm": 0.203,
+        "worst_cs_mm": 0.2
       }
     },
-    "lug_false_spar_bond": {
-      "te_half": "all bonded"
+    "swept_pocket_clearance": {
+      "te_half": {
+        "max_deflection_deg": 25.0,
+        "worst_intersection_mm3": 0.0
+      }
+    },
+    "naming_registry": {
+      "te_half": [
+        "HINGE0_CS_CARRIER_BOND",
+        "HINGE0_WING_CARRIER_BOND",
+        "HINGE1_CS_CARRIER_BOND",
+        "HINGE1_WING_CARRIER_BOND",
+        "HINGE2_CS_CARRIER_BOND",
+        "HINGE2_WING_CARRIER_BOND"
+      ]
     },
     "slow_tier_fresh_build": {
       "te_half": "pass"
     }
   },
-  "timestamp": "2026-07-14T08:56:32.609950+00:00"
+  "timestamp": "2026-07-20T16:28:06.432883+00:00"
 }
