@@ -192,3 +192,31 @@ implementation (session protocol, CLAUDE.md).
   presentation-layer lookup fix only, confined to the glTF/three.js path.
 - Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
   `scripts/r0_probes/probe_gltf_slash_names.py`).
+
+## cq.Assembly glTF export applies an implicit root-level Z-up->Y-up conversion — a naive world-space rotation matrix set as a node's LOCAL matrix rotates about the wrong axis
+
+- Root cause: glTF's spec mandates a Y-up coordinate convention; `cq.
+  Assembly.export(..., exportType="GLTF")` applies this as an ANCESTOR
+  transform on the exported scene graph (confirmed by dumping a CS body's
+  `matrixWorld` at rest, BEFORE any client-side rotation: a 90 degree
+  rotation matrix, not identity). `Object3D.matrix` in three.js is always
+  relative to the object's OWN PARENT, never world space — building a
+  rotation matrix directly from server-supplied `axis_p0`/`axis_dir`
+  (native Z-up, docs/conventions.md) and assigning it as a node's local
+  `.matrix` silently interpreted those coordinates in the node's
+  (Y-up-converted) PARENT frame instead of the native frame they're
+  actually expressed in. Produced a REAL but WRONG rotation — small,
+  nonzero displacement, not simply "no rotation applied" — which made it
+  hard to diagnose from the symptom alone; two rounds of hypothesis-and-
+  measure (React StrictMode double-mount, then several numeric-mismatch
+  theories) were both dead ends before dumping the raw `matrixWorld` data
+  made the coordinate-frame mismatch visible.
+- Workaround: transform `axis_p0` (a point — needs the FULL inverse of the
+  parent's `matrixWorld`) and `axis_dir` (a direction — needs only the
+  rotation part, `Vector3.transformDirection`) into each node's OWN parent
+  frame before building the rotation matrix, rather than assuming a flat/
+  identity parent hierarchy. Correct regardless of what the ancestor
+  transform actually is — never needed to reverse-engineer the Y-up
+  conversion explicitly. See `frontend/src/Viewer.tsx`'s deflection effect.
+- Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
+  `test_deflection_slider_matches_server_computed_position`).

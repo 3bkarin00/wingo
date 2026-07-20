@@ -92,10 +92,28 @@ export default function Viewer({ jobId, manifest }: Props) {
     scene.add(dirLight);
     scene.add(new THREE.AxesHelper(300));
 
+    // React.StrictMode (main.tsx) double-invokes this effect in dev mode
+    // (mount -> cleanup -> mount again) specifically to catch missing-
+    // cleanup bugs in exactly this shape of code — an async operation
+    // (loader.load) with no cancellation guard. Found empirically (P10
+    // gate's deflection test): without `cancelled`, BOTH the first
+    // (orphaned) and second (live) mounts' async glTF-load callbacks
+    // eventually fire and overwrite the SAME shared nodesRef/sceneRef,
+    // non-deterministically leaving nodesRef pointing at objects in a
+    // DETACHED scene graph that the deflection effect's
+    // `sceneRef.current.updateMatrixWorld(true)` call never reaches (it
+    // walks the CURRENT/live scene, not the orphaned one) — the rotated
+    // node's OWN matrix was set correctly, but its matrixWorld was never
+    // recomputed, so read-back vertex positions reflected a stale
+    // parent transform instead of the new rotation (a small, nonzero,
+    // WRONG displacement — not simply "no rotation applied", which is
+    // what made this confusing to diagnose from the symptom alone).
+    let cancelled = false;
     const loader = new GLTFLoader();
     loader.load(
       artifactUrl(jobId, manifest.artifacts.gltf),
       (gltf) => {
+        if (cancelled) return;
         scene.add(gltf.scene);
         const bySanitizedName = new Map<string, THREE.Object3D>();
         gltf.scene.traverse((o) => {
@@ -119,7 +137,9 @@ export default function Viewer({ jobId, manifest }: Props) {
         setLoaded(true);
       },
       undefined,
-      (err) => setLoadError(String(err)),
+      (err) => {
+        if (!cancelled) setLoadError(String(err));
+      },
     );
 
     let raf = 0;
@@ -138,6 +158,7 @@ export default function Viewer({ jobId, manifest }: Props) {
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       controls.dispose();
@@ -154,23 +175,44 @@ export default function Viewer({ jobId, manifest }: Props) {
   }, [visibility]);
 
   // Deflection slider -> rigid rotation of every CS-side node about the
-  // true hinge axis: M = T(p0) . R(axis, angle) . T(-p0), applied directly
-  // as each node's local matrix (nodes sit at identity under the scene
-  // root, so local == world at rest — matches backend.geometry.kinematics.
-  // rotate_point's own Rodrigues' formula, independently implemented here
-  // via three.js's own Matrix4/quaternion math, module docstring).
+  // true hinge axis: M = T(p0) . R(axis, angle) . T(-p0) in WORLD space,
+  // then converted into each node's PARENT-LOCAL frame before being
+  // assigned as its local `.matrix` (Object3D.matrix is always relative
+  // to its own parent, not world space). Found empirically (P10 gate's
+  // deflection test): cq.Assembly's glTF export applies an implicit
+  // root-level Z-up -> Y-up coordinate conversion (glTF's own spec-
+  // mandated convention, confirmed by dumping a CS body's matrixWorld at
+  // rest — a 90 deg rotation, not identity) as an ANCESTOR transform —
+  // `axis_p0`/`axis_dir` come from the server in our NATIVE Z-up frame
+  // (docs/conventions.md), so building the rotation matrix directly in
+  // that frame and assigning it as a node's LOCAL matrix silently
+  // interpreted it in the node's (Y-up-converted) PARENT frame instead,
+  // producing a real but WRONG rotation (small, nonzero, not the
+  // intended transform — not simply "no rotation applied", which is what
+  // made this one hard to spot from the symptom alone: two independent
+  // real-run diagnostics, both showing a small-but-wrong displacement,
+  // before dumping the raw matrixWorld data made the mismatch visible).
+  // Transforming axis_p0/axis_dir into the node's OWN parent frame first
+  // (inverse of the parent's matrixWorld — a point needs the full
+  // inverse; a direction only needs the rotation part, hence
+  // transformDirection) is correct regardless of what that ancestor
+  // transform actually is, without needing to know or reverse-engineer
+  // it explicitly.
   useEffect(() => {
     if (!kin) return;
-    const p0 = new THREE.Vector3(...kin.axis_p0);
-    const dir = new THREE.Vector3(...kin.axis_dir).normalize();
+    const p0World = new THREE.Vector3(...kin.axis_p0);
+    const dirWorld = new THREE.Vector3(...kin.axis_dir).normalize();
     const rad = THREE.MathUtils.degToRad(deflectionDeg);
-    const rot = new THREE.Matrix4().makeRotationAxis(dir, rad);
-    const toOrigin = new THREE.Matrix4().makeTranslation(-p0.x, -p0.y, -p0.z);
-    const fromOrigin = new THREE.Matrix4().makeTranslation(p0.x, p0.y, p0.z);
-    const m = fromOrigin.multiply(rot).multiply(toOrigin);
     for (const name of kin.cs_body_names) {
       const obj = nodesRef.current.get(name);
-      if (!obj) continue;
+      if (!obj || !obj.parent) continue;
+      const parentInverse = new THREE.Matrix4().copy(obj.parent.matrixWorld).invert();
+      const p0 = p0World.clone().applyMatrix4(parentInverse);
+      const dir = dirWorld.clone().transformDirection(parentInverse);
+      const rot = new THREE.Matrix4().makeRotationAxis(dir, rad);
+      const toOrigin = new THREE.Matrix4().makeTranslation(-p0.x, -p0.y, -p0.z);
+      const fromOrigin = new THREE.Matrix4().makeTranslation(p0.x, p0.y, p0.z);
+      const m = fromOrigin.multiply(rot).multiply(toOrigin);
       obj.matrixAutoUpdate = false;
       obj.matrix.copy(m);
     }
