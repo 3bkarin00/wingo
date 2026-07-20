@@ -106,8 +106,20 @@ def api_server():
 
 @pytest.fixture(scope="session")
 def frontend_server(api_server):
+    """Invokes vite's own binary directly, NOT `npm run dev -- --port ...`
+    — found empirically (this gate's first real run): npm's `--`
+    passthrough APPENDS to package.json's own `dev` script
+    ("vite --port 5173"), producing `vite --port 5173 --port 5731
+    --strictPort` (two --port flags), and vite's default `--host`
+    resolves "localhost" ambiguously (can bind IPv6-only) while
+    `_wait_for` below checks the explicit IPv4 loopack — together these
+    produced a real "Connection refused" against a server that had
+    genuinely started, just not on the checked address. Calling vite
+    directly with ONE unambiguous `--port` and an explicit
+    `--host 127.0.0.1` sidesteps both."""
+    vite_bin = REPO_ROOT / "frontend" / "node_modules" / ".bin" / "vite"
     proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(FRONTEND_PORT), "--strictPort"],
+        [str(vite_bin), "--port", str(FRONTEND_PORT), "--strictPort", "--host", "127.0.0.1"],
         cwd=str(REPO_ROOT / "frontend"),
     )
     try:
