@@ -1,4 +1,4 @@
-# Handoff — 2026-07-21
+# Handoff — 2026-07-22
 
 ## State
 - **R1 is fully gate-complete.** Every R1 gate (P0–P4, P6, P7, P8, P9,
@@ -18,8 +18,10 @@
 - 5-hour autonomous cycles armed in the Mac Claude session (cron; checks
   `origin/phone-notes` NOTES.md for user instructions from their iPhone
   first, then advances the gate queue). Progress artifact (status board
-  + embedded 3D viewer) republishes to a stable claude.ai URL — **still
-  showing pre-R1-close state, needs a refresh** (see next action).
+  + embedded 3D viewer, https://claude.ai/code/artifact/e95794cd-3ea9-
+  49f9-99d2-a66905efcf06) is FULLY REFRESHED: final regress numbers,
+  all-green gate rail, and a fresh `te_half` export (D24 π-joints, D25
+  interlock, pin-and-tube hinges, current as of 2026-07-22 01:12 UTC).
 - `kb-scaffold` branch (docs/kb knowledge base, 27 entries + make
   kb-index/kb-search + regress staleness check) pushed, awaiting merge.
 
@@ -27,15 +29,12 @@
 - **HOLD — user is manually testing the tool 2026-07-22. Do NOT start
   P11 (no R0 probes, no implementation) until they give a go-ahead.**
   This is recorded on `origin/phone-notes` NOTES.md too — check it
-  every cycle, it's the override channel. Fine to keep doing in the
-  meantime: finish the progress-artifact refresh (shell content is
-  updated with final regress numbers and published; the embedded 3D
-  viewer still needs the fresh `viewer_data.json` swapped in once
-  `scripts/export_viewer_data.py tests/configs/devices/te_half.yaml`
-  finishes on wingo.coder — scoped to `te_half` only, see the
-  known_issues.md entry on why the twisted-moderate config was
-  dropped), KB-entry writing, docs, anything that isn't new geometry
-  construction.
+  every cycle, it's the override channel. All queued non-P11 bookkeeping
+  is DONE (artifact refresh, known_issues, handoff, changelog) — there
+  is currently nothing else queued. If a cron cycle fires and finds this
+  hold still in place with nothing new on phone-notes, the correct
+  action is to do nothing (or re-check for a go-ahead a while later),
+  not to invent busywork.
 - Once the user gives the go-ahead: start **P11 (3-piece wing
   segmentation, R1.5)** per plan.md §9: read plan.md §8 step 6 (already
   re-read this session) + the P11 gate criteria, R0-probe any new OCC
