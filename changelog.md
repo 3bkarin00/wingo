@@ -901,3 +901,68 @@ meaningful change: what changed, why, and what it retired/added.
   invalidates the P6 sandwich geometry cache by design (source-hash keying).
 - Still open: WP1 pin-and-tube construction (hinges_pin_tube.py), gate files,
   regress.
+
+## 2026-07-21 — R1 closed: all gates green + regress green
+
+- P8 (kinematic sweep) gate went green after two dead-end attempts:
+  raw compound-vs-compound `BRepExtrema_DistShapeShape` between the
+  wing/CS skin solids and a proximity-culled version of the same both
+  hung for 10+ hours (workload-class problem — full-face-count solid
+  extrema is intractable regardless of culling). Fixed by adding
+  `sweep_min_distance_by_points` (backend/geometry/kinematics.py):
+  extract the moving body's vertices once, rotate via a vectorized
+  Rodrigues' formula, measure point-to-shell distance against the
+  static body's shell — reusing the technique already established in
+  `test_p04_te_cut.py`'s `_point_to_shell_distance`. Verified cheap
+  (8.35s/angle) with a throwaway R0 cost probe before committing to
+  the full relaunch. Result: worst_clearance_mm 4.9826 vs floor 4.95,
+  zero collisions, zero monotonic-trend violations, zero swept-volume
+  envelope overlap.
+- P9 (export) was silently missing from `gates_passed` after a prior
+  green run — traced to a Mac→remote rsync that didn't exclude
+  `artifacts/`, clobbering the remote's own `state.json` with a stale
+  Mac copy. Fixed the rsync invocations going forward (always exclude
+  `artifacts/` on code pushes; artifacts only ever flow remote→Mac)
+  and re-ran P9 for a clean record (7s).
+- P10 (web E2E) took 7 real attempts, each a genuine bug fixed at its
+  root, never blind-retried: (1) npm's own `--port` flag collided with
+  ours — invoke the vite binary directly; (2) vite's `/api` proxy was
+  hardcoded to port 8000, colliding with a human dev session — made it
+  read `VITE_PROXY_TARGET` from the environment; (3) the `built_job`
+  fixture didn't declare `frontend_server` as an explicit param
+  (pytest fixture-scoping bug); (4) `pipeline.py`'s
+  `_verify_solid_bodies` required exactly one solid per body, rejecting
+  legitimate multi-solid ribs/spars — relaxed to `>= 1`, matching
+  existing P6 gate precedent; (5) the glTF `.bin` sidecar 404'd because
+  the artifact allowlist only listed the `.gltf` name — derive the
+  sidecar name from it; (6) `getBodyNames()` returned `[]` with zero JS
+  errors — three.js's `GLTFLoader`/`PropertyBinding.sanitizeNodeName`
+  strips `/` from every loaded object's `.name` (three.js reserves `/`
+  for animation-track paths); fixed via client-side name-sanitization
+  at lookup time, the wire naming contract untouched; (7) the
+  deflection-slider vertex diverged by 144mm — root cause was
+  `cq.Assembly`'s glTF export applying an implicit root-level Z-up→
+  Y-up ancestor transform, so a rotation matrix built from native-frame
+  axis data rotated about the wrong axis once assigned as a child
+  node's *local* (parent-relative) matrix; fixed by transforming the
+  axis into each node's own parent frame before building its local
+  rotation. Diagnosed via a new permanent `?job=<uuid>` debug-reload
+  feature in `frontend/src/App.tsx` (reopens a completed job's Viewer
+  without resubmitting, turning ~26min iterations into ~10s ones) plus
+  a temporary raw-matrix-dump hook, removed after use. A first
+  hypothesis (React StrictMode double-mount race) was tested via a
+  `cancelled`-flag guard and verified empirically to make zero
+  difference — a genuine dead end, reported honestly and moved past
+  rather than left in as unexplained defensive code (the guard itself
+  was kept, since it's correct regardless).
+- `make regress` (all 10 R1 gates re-run together, real kernel, no
+  cache shortcuts for the expensive parts) ran 21:35→00:24 UTC on
+  wingo.coder, 2h49m wall time: **104/104 tests passed, 0 failures.**
+  Per-suite: p00 7/7 (0.96s), p01 8/8 (0.25s), p02 9/9 (4.57s), p03
+  16/16 (31.56s), p04 25/25 (5:12), p06 22/22 5 warnings (1:15:48),
+  p08 3/3 (41:51), p09 3/3 (6.86s), p07 7/7 (18:55), p10 4/4 (26:52).
+  No later phase broke an earlier one.
+- **R1 (plan.md's release train: "One-piece wing: OML, devices,
+  sandwich internals, hinges, hardpoints, viewer, STEP/STL/glTF") is
+  now fully gate-complete and regression-confirmed.** Next up: P11
+  (3-piece wing segmentation, R1.5).
