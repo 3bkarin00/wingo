@@ -24,21 +24,26 @@
   kb-index/kb-search + regress staleness check) pushed, awaiting merge.
 
 ## Next single action
-- Refresh the progress artifact (same claude.ai URL, same file path)
-  with the real regress numbers above, replacing any "running"
-  placeholders. Then, if remote CPU allows, re-export
-  `artifacts/viewer_data.json` via `scripts/export_viewer_data.py` on
-  wingo.coder (current embedded viewer is a stale July-14 snapshot,
-  predates D23–D25 interlock/π-joints and the pin-and-tube hinges) and
-  rebuild the embedded 3D viewer from it.
-- Then start **P11 (3-piece wing segmentation, R1.5)** per plan.md §9:
-  read plan.md §8 step 6 (already re-read this session) + the P11 gate
-  criteria, R0-probe any new OCC boundary (tongue/box body construction,
-  break-plane cuts — likely reuses existing spar-shape footprint
-  functions from D23, nothing fictional-API-shaped expected but probe
-  anyway per the hard rule), implement, `make gate PHASE=p11`, then
-  `make regress` again (P11's own gate criteria requires P2–P10 green
-  in segmented mode).
+- **HOLD — user is manually testing the tool 2026-07-22. Do NOT start
+  P11 (no R0 probes, no implementation) until they give a go-ahead.**
+  This is recorded on `origin/phone-notes` NOTES.md too — check it
+  every cycle, it's the override channel. Fine to keep doing in the
+  meantime: finish the progress-artifact refresh (shell content is
+  updated with final regress numbers and published; the embedded 3D
+  viewer still needs the fresh `viewer_data.json` swapped in once
+  `scripts/export_viewer_data.py tests/configs/devices/te_half.yaml`
+  finishes on wingo.coder — scoped to `te_half` only, see the
+  known_issues.md entry on why the twisted-moderate config was
+  dropped), KB-entry writing, docs, anything that isn't new geometry
+  construction.
+- Once the user gives the go-ahead: start **P11 (3-piece wing
+  segmentation, R1.5)** per plan.md §9: read plan.md §8 step 6 (already
+  re-read this session) + the P11 gate criteria, R0-probe any new OCC
+  boundary (tongue/box body construction, break-plane cuts — likely
+  reuses existing spar-shape footprint functions from D23, nothing
+  fictional-API-shaped expected but probe anyway per the hard rule),
+  implement, `make gate PHASE=p11`, then `make regress` again (P11's
+  own gate criteria requires P2–P10 green in segmented mode).
 
 ## KB entries added/updated this session
 - All 27 seed entries live on `kb-scaffold` (not yet on this branch).
@@ -47,10 +52,17 @@
   lesson, three.js slash-stripping, glTF Y-up parent-frame lesson.
 
 ## Blockers / open questions
-- None blocking. wingo.coder workspace restarted twice earlier this
-  session (agent lost) — recovery per docs/known_issues.md libGL entry
-  + `make up`; long runs use setsid + logs in ~/ (persistent volume),
-  never /tmp — this held up fine through the full regress run.
+- **User-imposed hold on P11**, not a technical blocker — see above.
+- wingo.coder workspace container got recreated again post-regress
+  (agent connection lost mid the viewer-data export, no restart command
+  issued) — recovered per docs/known_issues.md's now-expanded libGL
+  entry (apt-get update THEN install, then `make up`); long runs use
+  setsid + logs in ~/ (persistent volume), never /tmp.
+- New, unresolved, non-blocking finding: `te_half_twisted_moderate.yaml`
+  fails a sandwich core watertightness check — outside the P6 gate's
+  own deliberate te_half-only battery scope, logged in known_issues.md,
+  worth a look during/before P11 since segmentation cuts through the
+  same construction.
 
 ## Do not touch
 - P0-P4, P6, P7, P8, P9, P10 gates frozen (docs/gate_changes.md).
