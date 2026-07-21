@@ -26,7 +26,24 @@ implementation (session protocol, CLAUDE.md).
   workspace before running anything that imports `cadquery`/`OCP`/`gmsh`.
   Consider baking this into the Coder workspace image/dotfiles so future
   workspace rebuilds don't need to rediscover it.
-- Phase found: p00 (R0 probes, `docs/r0_findings/p00.md`).
+- Recurs on EVERY workspace container recreation (agent connection lost,
+  forced `coder restart`, or an unexplained Terraform re-apply of
+  `docker_container.workspace` — seen mid-session with no restart command
+  issued). The container's root filesystem, including anything installed
+  via apt, is ephemeral; only `home_volume` (repo, `.venv`) and the
+  docker-in-docker storage volume (Postgres data) survive. Full recovery
+  sequence: `sudo apt-get update` (the cached package index can itself be
+  stale enough after a recreation to 404 on the mirror — hit this once,
+  a plain `apt-get install` without `update` first failed) → the
+  `apt-get install` line above → `make up` (redoes `docker compose up -d`
+  for postgres/redis, which come back with their prior data intact) →
+  verify with `.venv/bin/python3 -c "import cadquery, gmsh"` before
+  relaunching whatever was running. Any long remote job must be resilient
+  to this: log to `~/` not `/tmp` (survives), and expect to need this
+  recovery sequence before a relaunch after any multi-hour gap.
+- Phase found: p00 (R0 probes, `docs/r0_findings/p00.md`); recreation
+  pattern first hit repeatedly during R1 gate-closing (P8/P10 runs) and
+  again during the post-R1 viewer-data export.
 
 ## Unmatched shell glob reaches pytest as a literal path
 
