@@ -10,5 +10,15 @@ Format: add entries at the top, newest first.
 
 ---
 
+## 2026-07-21
+- **HOLD — do not start P11.** R1 is gate-complete and regress-confirmed
+  (104/104). I want to manually test the tool myself before any new phase
+  starts. Testing tomorrow (2026-07-22). Every 5-hour cycle until then:
+  do NOT begin P11 implementation or R0 probes. Fine to keep doing pure
+  bookkeeping/cleanup (finish the viewer_data.json re-export + progress
+  artifact refresh already in flight, KB entries, docs) but no new
+  geometry-construction work. Re-check this file each cycle — I'll clear
+  this entry or post a go-ahead once I've tested.
+
 ## (example) 2026-07-19
 - (nothing yet — the build queue proceeds as planned)
