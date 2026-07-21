@@ -427,10 +427,11 @@ def _export_one(cfg_path: Path) -> dict:
         )
         if config.te_surface.hinges.mode == "generated":
             capabilities.append(
-                "P7: generated-mode hinge hardware — lug (wing-side, bonded to the false "
-                "spar) + tang (CS-side, embedded in the nose material) knuckle pairs, "
-                "coaxial pin bore verified against the true hinge axis, clearance to the "
-                "opposing body verified >= gap_mm. cots mode not yet implemented."
+                "P7: generated-mode hinge hardware — pin-and-tube construction (ADR-005): "
+                "alternating wing-side/CS-side tube segments in bonded carrier blocks (false "
+                "spar / LE web), coaxial pin bore verified against the true hinge axis, "
+                "carrier bond gaps verified real and positive (never touching). cots mode "
+                "not yet implemented."
             )
 
     return {
