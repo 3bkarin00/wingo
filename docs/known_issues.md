@@ -237,3 +237,31 @@ implementation (session protocol, CLAUDE.md).
   conversion explicitly. See `frontend/src/Viewer.tsx`'s deflection effect.
 - Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
   `test_deflection_slider_matches_server_computed_position`).
+
+## Sandwich core body non-watertight on a moderately-twisted device config (P6 gate-scope gap, not a regression)
+
+- Root cause: unknown/unconfirmed — NOT root-caused, only observed. Running
+  `scripts/export_viewer_data.py` (the standalone diagnostic tool, not a
+  gate) against `tests/configs/devices/te_half_twisted_moderate.yaml`
+  fails at the very first sandwich volume check:
+  `AssertionError: sandwich core_upper: not watertight`, thrown by
+  `iml.build_sandwich_body`'s `core_upper` solid before ribs/spars/hinges
+  are even reached. `te_half.yaml` (identical pipeline, zero twist) builds
+  this same construction cleanly in the same run.
+- This is NOT a P6 gate regression: `test_p06_sandwich.py`/
+  `test_p06_ext_interlock.py` deliberately scope their real-boolean
+  battery to `te_half.yaml` only ("cost-driven scope decision, not a
+  shortcut" — each config costs tens of minutes even cache-hit). Extreme
+  taper is separately covered by `tests/configs/edge/high_taper.yaml`
+  during development, but no edge config exercises moderate TWIST on a
+  half-wing-with-device — this is a genuine coverage gap the gate battery
+  never claimed to close, not something that used to pass and broke.
+- Workaround: none yet — not investigated further this session (found
+  while regenerating diagnostic viewer data post-R1-close, not blocking
+  any gate). `scripts/export_viewer_data.py` now only targets `te_half`
+  explicitly until this is root-caused.
+- Phase found: post-R1 (viewer-data regen), config
+  `tests/configs/devices/te_half_twisted_moderate.yaml`. Worth a look
+  before/during P11, since segmentation adds break-plane cuts through the
+  same sandwich core construction — if twist-sensitivity is real, a
+  segmented+twisted config could hit it too.
