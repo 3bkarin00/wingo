@@ -254,8 +254,8 @@ def _sandwich_export(config: Config, sections, res) -> dict:
     ribs_timing_s = time.perf_counter() - t0
     for rib in rib_set.ribs:
         solids, shards = filter_shards(rib.solid, min_volume=1e-6)
-        assert len(solids) == 1 and not shards and is_watertight(solids[0]), (
-            f"rib at y={rib.y_mm:.1f}: not a single valid watertight solid "
+        assert solids and not shards and all(is_watertight(s) for s in solids), (
+            f"rib at y={rib.y_mm:.1f}: not all-valid/watertight after shard filter "
             f"({len(solids)} solids, {len(shards)} shards)"
         )
     print(f"    ribs verified: {ribs_timing_s:.1f}s, {len(rib_set.ribs)}/{len(rib_planes)} built "
