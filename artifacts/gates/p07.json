@@ -1,0 +1,49 @@
+{
+  "phase": "p07",
+  "pass": true,
+  "metrics": {
+    "hinges_built": {
+      "te_half": {
+        "count": 3,
+        "failed": []
+      }
+    },
+    "watertight_check": {
+      "te_half": "all pass"
+    },
+    "hole_coaxiality": {
+      "te_half": {
+        "faces_checked": 12,
+        "worst_deviation_mm": 0.0,
+        "tolerance_mm": 0.05
+      }
+    },
+    "carrier_bond_gaps": {
+      "te_half": {
+        "target_mm": 0.2,
+        "worst_wing_mm": 0.203,
+        "worst_cs_mm": 0.2
+      }
+    },
+    "swept_pocket_clearance": {
+      "te_half": {
+        "max_deflection_deg": 25.0,
+        "worst_intersection_mm3": 0.0
+      }
+    },
+    "naming_registry": {
+      "te_half": [
+        "HINGE0_CS_CARRIER_BOND",
+        "HINGE0_WING_CARRIER_BOND",
+        "HINGE1_CS_CARRIER_BOND",
+        "HINGE1_WING_CARRIER_BOND",
+        "HINGE2_CS_CARRIER_BOND",
+        "HINGE2_WING_CARRIER_BOND"
+      ]
+    },
+    "slow_tier_fresh_build": {
+      "te_half": "pass"
+    }
+  },
+  "timestamp": "2026-07-20T16:28:06.432883+00:00"
+}

@@ -1,0 +1,100 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #14151a;
+  color: #e6e6e6;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2c33;
+}
+
+header h1 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: #9fd08a;
+}
+
+.error {
+  color: #e57373;
+  font-size: 0.85rem;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+}
+
+.hint {
+  padding: 1rem;
+  color: #888;
+}
+
+.viewer {
+  display: flex;
+  height: 100%;
+}
+
+.viewer-canvas {
+  flex: 1;
+  min-width: 0;
+}
+
+.viewer-panel {
+  width: 280px;
+  padding: 0.75rem;
+  overflow-y: auto;
+  border-left: 1px solid #2a2c33;
+}
+
+.viewer-panel h3 {
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.body-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.body-list .role {
+  color: #888;
+}
+
+.deflection {
+  margin-top: 1rem;
+}
+
+.deflection input[type="range"] {
+  width: 100%;
+}

@@ -170,9 +170,9 @@ END:   rewrite handoff.md; verify state.json matches reality; append
 
 A standalone, locally deployed web application that generates a complete,
 manufacturable, analysis-ready parametric composite wing: outer mold line,
-sandwich skin, ribs, spars, trailing-edge control surface, leading-edge droop
-nose, hinges, segment joints, skin latches, fuselage attachment hardpoints, and
-CNC mold tooling — from a single declarative input configuration.
+sandwich skin, ribs, spars, trailing-edge control surface, hinges, segment
+joints, skin latches, fuselage attachment hardpoints, and CNC mold tooling —
+from a single declarative input configuration.
 
 The tool performs **no FEA itself**. Its analysis deliverable is an Ansys-ready
 package whose quality is guaranteed by automated gates plus a formal manual
@@ -184,7 +184,7 @@ Ansys acceptance procedure.
 |---|---|---|
 | D1 | Interaction | Web UI, three.js viewer: body toggles + deflection slider (v1) |
 | D2 | Deployment | Coder cloud workspace, Docker Compose, viewer via port-forward; standalone repo |
-| D3 | Devices | One TE hinged surface + one LE hinged droop per half-span; slats deferred |
+| D3 | Devices | One TE hinged surface per half-span; LE droop dropped from scope (ADR-004), slats deferred |
 | D4 | Device placement | Devices fully contained within one wing segment (else validation error) |
 | D5 | Manufacturing | Composite molded: sandwich skin (foam core + face sheets), molded internals |
 | D6 | Trailing edge | Blunt TE forced, `te_min_thickness_mm` |
@@ -204,6 +204,10 @@ Ansys acceptance procedure.
 | D20 | Reports | Bilingual EN/AR, lualatex RTL |
 | D21 | Sequencing | R1 core → R1.5 segmentation → R2 Ansys → R3 molds → R4 reports/DXF/joint hardware detail |
 | D22 | Mold hardware | CNC defaults (flange 40 mm, dowel Ø8, fit params), schema-overridable |
+| D23 | Spar construction | Shape-configurable per spar: `web` (existing plain thickened-surface behavior) \| `c_channel` \| `i_beam` (swept/lofted caps) \| `box` (twin webs + full-width caps) \| `tube` (lofted circular section); rib cutouts become shape-dependent via one footprint function per shape (single source for cutouts and D25's interlock slots) |
+| D24 | Rib/spar skin bonding | π-joint ribs: rib's skin-contact segments offset inward for bond gap; matching π-section (base + 2 legs) swept along the offset IML contact curve, trimmed clear of spar crossings — applies to every rib, incl. those with π-molded construction |
+| D25 | Rib×spar interlock | Tab-and-slot at rib×spar crossings, `web`/`c_channel`/`i_beam` spars only (D23) — rib keeps tabs where the spar cutout would otherwise be open, spar web gets matching slots (true prismatic intersection, not axis-aligned); `box`/`tube` crossings keep D23's plain shape-matched cutout unchanged. Per-rib override via `ribs.overrides` |
+| D26 | Hinges (generated mode) | Pin-and-tube (ADR-005, supersedes the original lug/tang knuckle-pair construction): alternating wing-side/CS-side tube segments in bonded carriers, swept clearance pockets built as union-of-rotated-copies through ±(max_deflection + margin), not a single revolve |
 
 **Assumption A1 (open):** R1 builds a one-piece wing; segmentation ships as R1.5.
 Joint hardware detail (housings/bolts) in R4/P18; joint housing hardpoint zones
@@ -256,7 +260,7 @@ Coder workspace (Docker Compose, ports forwarded)
 - **Twist axis:** user-declared `twist_axis_xc`, stored on every section — never implicit.
 - **Hinge/latch axes:** perfectly straight 3D lines derived FIRST; mechanisms
   defined relative to their axis, never the reverse.
-- **Signs:** TE surface trailing-edge-down positive; droop leading-edge-down positive.
+- **Signs:** TE surface trailing-edge-down positive.
 - **Airfoils:** unit chord, TE→upper→LE→lower→TE, blunt TE enforced, identical
   cosine resampling (`resample_points`, odd) before any placement.
 - **Naming contract:** `SEG-{C|L|R}/BODY-{name}/ROLE-{skin|rib|spar|...}` across
@@ -288,23 +292,34 @@ skin:
 
 spars:                               # BOTH spars carry tongues (D8); equal engagement
   - {name: main, xc_root: 0.25, xc_tip: 0.25, web: {material: cfrp_200gsm_twill, plies: 4},
+     shape: web,                     # web | c_channel | i_beam | box | tube (D23)
      tongue: {cross_section: rect_hollow,   # rect_hollow | circular_tube
               engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}}
   - {name: rear, xc_root: 0.70, xc_tip: 0.70, web: {material: cfrp_200gsm_twill, plies: 3},
+     shape: web,
      tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}}
+     # shape: c_channel/i_beam add {cap_width_mm, cap_thickness_mm, inside_iml: bool};
+     # box adds {web_spacing_mm}; tube adds {od_root_mm, od_tip_mm, wall_mm}
 
 ribs:
   count: 9
   construction: {material: cfrp_200gsm_twill, plies: 3}
   lightening_holes: {enabled: true, margin_mm: 8}
+  overrides: []                      # per-rib overrides incl. interlock.enabled: false (D25)
+
+structure:
+  interlock:                         # D25 — web-bearing spar shapes only
+    enabled: true
+    style: tab_slot
+    tabs_per_crossing: 2
+    tab_width_mm: 6.0
+    protrusion_mm: 0.0               # 0 = flush with far web face; >0 = proud
+    fit_clearance_mm: 0.1
+    edge_margin_mm: 3.0
 
 te_surface:  {enabled: true, span_start_frac: 0.55, span_end_frac: 0.95,
               hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
               max_deflection_deg: 25, hinges: {mode: generated|cots, count: 3, cots_pin_dia_mm: 3.0}}
-
-le_droop:    {enabled: true, span_start_frac: 0.10, span_end_frac: 0.55,
-              hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
-              max_deflection_deg: 20, hinges: {mode: generated, count: 2}}
 
 hardpoints:
   auto: [hinge_lands, joint_housing_zones, fuselage_bosses]
@@ -338,10 +353,9 @@ output:
   formats: [step, stl, gltf, cdb, dxf, pdf, layup_csv, layup_json]
 ```
 
-**P0 validation rules (reject with actionable messages):** device windows
-non-overlapping and segment-contained (D4); TE hinge aft of rear spar +
-clearance, LE hinge forward of main spar + clearance; hinge axes contained in
-OML with margin ≥ face+core stack, **sampled along the axis**; core + 2×face ≤
+**P0 validation rules (reject with actionable messages):** device window
+segment-contained (D4); TE hinge aft of rear spar + clearance; hinge axes
+contained in OML with margin ≥ face+core stack, **sampled along the axis**; core + 2×face ≤
 80 % of min local airfoil thickness; `gap_mm` ≥ 2× tessellation tolerance and
 ≥ 10× kernel tolerance; break stations outside device windows; lightening holes
 degrade gracefully (shrink → omit, warn) on small tip ribs.
@@ -374,12 +388,11 @@ housing box with configured clearance.
    per-segment dihedral/sweep; C1 continuity of the unbroken OML at segment joins.
 3. **Master OML loft** (half-span, watertight), mirror for full span.
 4. **Reference geometry before any cut** — spar ruled surfaces; rib planes (auto +
-   forced at device edges and break stations); TE/LE hinge axes (straight,
+   forced at device edges and break stations); TE hinge axis (straight,
    containment-sampled); break planes; hardpoint footprints; latch & boss locations.
 5. **Device cuts** — TE: spanwise gap cuts + chordwise cut, nose rebuilt as
    revolution about hinge axis, concave cove + false spar on wing side, small
-   deliberate clearance angle (never exact tangency, F4). LE droop: mirrored
-   approach; droop keeps original airfoil LE (why droop beat slats).
+   deliberate clearance angle (never exact tangency, F4).
 6. **Segmentation (R1.5)** — break-plane cuts; BOTH spars get male tongues on
    the outer panels (rect hollow or circular tube), built **parallel to the
    horizontal insertion axis by construction** — NOT along the swept spar
@@ -394,13 +407,44 @@ housing box with configured clearance.
    volume, cutouts + holes as 2D face ops before thickening. Spars trimmed to
    IML; false spars close device cut faces. **Midsurface faces constructed here,
    alongside the solids** — not extracted later.
-8. **Hardware** — hinges (generated or COTS pockets) with holes exactly on axis;
-   fuselage bosses; joint retention (R4/P18): per-spar aluminum housings (sleeve
-   with structural side walls, integral threaded bottom boss, countersink lip
-   penetrating the upper skin), Z-bolts, tongue clearance holes, skin lip
-   cutouts. Bore chain per bolt: lip countersink → housing top → tongue hole →
-   bottom boss, all coaxial. Galvanic-isolation (glass ply) note at every
-   aluminum–CFRP bond line flows into the P19 report.
+   Sub-steps, in build order (D23–D25):
+   7a. **Spar bodies** (D23) — shape behind `structure.spars[].shape` enum:
+       `web` unchanged; `c_channel`/`i_beam` caps swept/lofted along the P3
+       ruled-surface ∩ IML cap-path curves; `box` twin offset webs + full-width
+       caps; `tube` lofted circular section, wall-validated vs. local internal
+       depth. One footprint function per shape (2D cross-section at a given
+       y) is the single source for both rib cutouts here and D25's slots.
+   7b. **Ribs incl. π-joint offsets** (D24) — standard rib outline, THEN
+       skin-contact segments offset inward by bond gap before extrusion;
+       spar cutouts (7a's footprint) and hole-overrides applied after the
+       offset. π-section bond bodies (base + 2 legs) built separately, swept
+       along the offset IML contact curve, trimmed clear of spar-crossing
+       y-intervals.
+   7c. **Interlock tabs/slots** (D25) — for `web`/`c_channel`/`i_beam`
+       crossings only: rib cutout prism minus tab prisms (rib keeps tab
+       material); matching slot = tab-footprint-as-tool ∩ spar web solid
+       (true prismatic intersection against the real, possibly swept/tilted
+       web). `box`/`tube` crossings: byte-identical to the pre-D25 plain
+       cutout, asserted by regression compare on cached bodies.
+8. **Hardware** — hinges: pin-and-tube (D26/ADR-005) — reference axis +
+   stations (reuses `derive_hinge_axis()`) → wing/CS tube segments in bonded
+   carrier blocks (false spar / LE web) → swept clearance pockets (union of
+   rotated carrier+tube copies through ±(max_deflection + margin), offset,
+   subtract — never a single revolve) → access bore → set-screw cut, no
+   thread geometry. COTS mode unchanged (placeholder pockets, deferred).
+   Fuselage bosses; joint retention (R4/P18): per-spar aluminum housings
+   (sleeve with structural side walls, integral threaded bottom boss,
+   countersink lip penetrating the upper skin), Z-bolts, tongue clearance
+   holes, skin lip cutouts. Bore chain per bolt: lip countersink → housing
+   top → tongue hole → bottom boss, all coaxial. Galvanic-isolation (glass
+   ply) note at every aluminum–CFRP bond line flows into the P19 report.
+   **Face naming for FEA** (hinge carriers, π-joint bonds, tab/slot bonds):
+   destroyed-by-boolean face identity is recovered via a shared CENTROID
+   REGISTRY module — (expected centroid, normal, area, target name) recorded
+   for every bond face at creation time, matched against each body's final
+   faces after all booleans complete (centroid within tol, normal aligned,
+   area within 10%); an unmatched registry entry is a hard failure (a
+   boolean ate a bond face), never skipped silently.
 9. **Molds (R3)** — per body: parting curve at max half-breadth per station →
    parting surface → upper/lower cavity blocks; flanges, pin bores, stock
    auto-sectioning with inter-block alignment; demold clearance vs pull direction
@@ -468,27 +512,51 @@ Gate artifacts: `artifacts/gates/pXX.json`. All gates also stream metrics to `ga
   0.5 %; shard filter reports 0 bodies below min-volume threshold (F3); cove
   clearance angle present (no tangent face pairs, F4).
 
-**P5 — LE droop cut**
-- Gate: `make gate PHASE=p05`
-- Pass: 3 watertight bodies; same conservation, shard, tangency criteria.
+**P5 — retired (ADR-004)**
+- LE droop was dropped from scope before this phase started; no phase does
+  this work. Number left unused rather than renumbering P6+ (see ADR-004
+  Consequences) — P0–P4 and P6 onward keep their original gate/phase numbers.
 
 **P6 — Sandwich internals + hardpoints**
-- Scope: §8.7 (includes midsurface construction alongside solids).
+- Scope: §8.7 (includes midsurface construction alongside solids). Extended
+  post-kickoff (D23–D25, own gates, own R0 probes — sweep-with-spine and
+  offset-curve-on-surface for the spar caps/π-section sweeps, XDE face
+  naming for the centroid registry): spar shape variants (`web`/`c_channel`/
+  `i_beam`/`box`/`tube`), π-joint rib/skin bonding, tab-and-slot rib×spar
+  interlock at web-bearing crossings. `test_p06_ext_interlock.py` covers
+  D24/D25; D23 shape-variant coverage lives alongside the base P6 gate.
+  Regression-locked: `box`/`tube` crossings byte-identical to pre-extension
+  cutout geometry.
 - Gate: `make gate PHASE=p06`
 - Pass: pairwise boolean interference = 0 across ALL bodies; every auto hardpoint
   has core ramp-out (core body distance-to-hardpoint ≥ ramp length); IML audit:
   min wall ≥ face-sheet stack everywhere (sampled); every rib watertight after
   holes/cutouts; midsurface face count matches structural body count.
+  Extension pass criteria (D23–D25): tab↔slot clearance = `fit_clearance_mm`
+  uniform at every crossing; tab far face flush with (or proud by
+  `protrusion_mm` of) the far web face; every slot respects `edge_margin_mm`
+  to web edges/caps; π-joint leg-inner-face ↔ rib-face distance = bond gap
+  BY CONSTRUCTION; named bond selections (tab/slot, π base/legs) survive a
+  STEP XDE re-import.
 
-**P7 — Hinges (generated mode)**
+**P7 — Hinges (pin-and-tube, ADR-005)**
+- Scope: §8.8. Supersedes the original lug/tang knuckle-pair construction
+  (ADR-005) before P8 starts — same phase number, new construction method.
+  R0: sweep-with-spine / rotated-copy-union APIs against the installed
+  CadQuery/OCP (docs/r0_findings/p07.md, appended under its own heading —
+  the original lug/tang probe trail stays as historical record).
 - Gate: `make gate PHASE=p07`
-- Pass: all hinge holes coaxial with their axis within 0.05 mm, measured on the
-  generated geometry; lug/tang clearance to moving body ≥ configured fit gap.
+- Pass: all hinge bore holes coaxial with their axis within 0.05 mm, measured
+  on the generated geometry; carrier clearance to the body it must swing
+  clear of ≥ configured fit gap at rest AND swept through ±max_deflection
+  (0 collisions in the swept-pocket check); carrier bonded to its mount
+  (false spar / LE web) with real positive-volume contact, never exact
+  zero-distance touch (F4-adjacent).
 
 **P8 — Kinematic gate (the decisive R1 gate)**
 - Gate: `make gate PHASE=p08`
-- Pass: sweep TE and droop through ±max_deflection: coarse 1° steps + fine 0.1°
-  steps in the outer 20 % of travel; collision count = 0 at every step; minimum
+- Pass: sweep TE through ±max_deflection: coarse 1° steps + fine 0.1° steps in
+  the outer 20 % of travel; collision count = 0 at every step; minimum
   clearance ≥ gap_mm − tolerance and monotonic-trend check; swept-volume boolean
   at both extremes intersect fixed wing = ∅ (F9).
 

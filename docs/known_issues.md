@@ -26,7 +26,24 @@ implementation (session protocol, CLAUDE.md).
   workspace before running anything that imports `cadquery`/`OCP`/`gmsh`.
   Consider baking this into the Coder workspace image/dotfiles so future
   workspace rebuilds don't need to rediscover it.
-- Phase found: p00 (R0 probes, `docs/r0_findings/p00.md`).
+- Recurs on EVERY workspace container recreation (agent connection lost,
+  forced `coder restart`, or an unexplained Terraform re-apply of
+  `docker_container.workspace` — seen mid-session with no restart command
+  issued). The container's root filesystem, including anything installed
+  via apt, is ephemeral; only `home_volume` (repo, `.venv`) and the
+  docker-in-docker storage volume (Postgres data) survive. Full recovery
+  sequence: `sudo apt-get update` (the cached package index can itself be
+  stale enough after a recreation to 404 on the mirror — hit this once,
+  a plain `apt-get install` without `update` first failed) → the
+  `apt-get install` line above → `make up` (redoes `docker compose up -d`
+  for postgres/redis, which come back with their prior data intact) →
+  verify with `.venv/bin/python3 -c "import cadquery, gmsh"` before
+  relaunching whatever was running. Any long remote job must be resilient
+  to this: log to `~/` not `/tmp` (survives), and expect to need this
+  recovery sequence before a relaunch after any multi-hour gap.
+- Phase found: p00 (R0 probes, `docs/r0_findings/p00.md`); recreation
+  pattern first hit repeatedly during R1 gate-closing (P8/P10 runs) and
+  again during the post-R1 viewer-data export.
 
 ## Unmatched shell glob reaches pytest as a literal path
 
@@ -41,3 +58,210 @@ implementation (session protocol, CLAUDE.md).
   phase is marked passed in state.json but no gate file matches, fail loudly
   rather than let an empty/literal glob leak through and masquerade as a pass.
 - Phase found: p00 (`scripts/run_regress.py`).
+
+## Twisted/tilted device configs cost 2-4x more per boolean than untwisted
+
+- Root cause: measured directly (artifacts/gates/p04_timings.json, cold
+  cache) — `te_half` (untwisted, sweep/dihedral=0) vs `te_half_twisted`
+  (-8° tip twist): `wing_cut_s` 28.6s -> 60.2s (2.1x), `cs_common_s` 20.0s ->
+  83.7s (4.2x). Lofting (`loft_regions_s`) and per-station analytic
+  sectioning (`station_data_s`) are IDENTICAL between the two configs
+  (0.53s, 0.02s) — the cost is entirely in `BRepAlgoAPI_Cut`/`Common`
+  themselves, not in anything P4's per-station arc construction controls.
+  Twist tilts the station cutting planes relative to the OML's own ruled
+  facets, so the boolean's face-face intersection curves are more numerous
+  and less axis-aligned — a standard OCC cost driver, not a construction
+  defect. Separately, `test_no_interbody_tangency`'s OWN verification
+  boolean (wing ∩ CS on the two FINAL trimmed solids, independent of
+  construction) hit 126.2s on the twisted config — the single largest
+  number measured, technically over the "~120s" investigate threshold, but
+  it is a deliberate F4 safety check (not something to weaken for speed)
+  and still sits well inside the per-test budget.
+- Workaround: NONE applied — no construction-strategy change met the bar
+  for one. Rationale: no single CONSTRUCTION boolean exceeds ~120s (60.2s
+  and 83.7s both under it); total per-config time (145s construction,
+  470s for all 8 tests incl. a forced-fresh rebuild) sits well inside
+  `tolerances.GEOMETRY_TEST_TIMEOUT_S` (600s, ~4x headroom on the single
+  slowest test). The actual pain this was diagnosed for — every gate
+  re-run paying this cost regardless of what changed — is fixed by the
+  geometry build cache (`tests/gates/geometry_cache.py`), which makes an
+  unchanged config+code re-run cost under a second. Tuning fidelity down
+  (fewer stations, coarser sections, looser fuzzy value) to shave a
+  one-time cold-build cost that no longer sits in the iteration loop would
+  trade real geometric precision for a problem that's already solved —
+  revisit ONLY if a future config's cold build actually approaches the
+  600s budget (start with `fuzzy_cut`/`fuzzy_common`'s FuzzyValue on just
+  that config, per plan.md's own F4 guidance, before touching station/arc
+  density).
+- Phase found: p04 (`docs/r0_findings/p04.md`, geometry-cache test
+  architecture decision, changelog.md).
+
+## P6 sandwich-shell booleans: hollow_common dominates, and identical boolean workloads vary ~4.6x run-to-run
+
+- Root cause (two separate observations, both from the same instrumented
+  measurements — `SandwichLofts.timings_s`/`SandwichBody.timings_s` in
+  `backend/geometry/iml.py`, on `te_half_twisted_moderate.yaml`):
+  1. **Cost ranking within iml.py**: the per-station wire offsets and both
+     ruled lofts are trivial (0.06s + 0.85s TOTAL). The entire cost is the
+     three downstream booleans, and they are far from equal:
+     `face_sheet_cut` (wing − face_IML) 226.9s, `core_cut` (face_IML −
+     hollow_IML) 33.9s, `hollow_common` (wing ∩ hollow_IML) **370.2s —
+     ~59% of the total on its own**. Two thin nearly-parallel offset
+     shells intersecting a full device-cut body is exactly the
+     near-coincident-face geometry OCC booleans are slowest at.
+  2. **Run-to-run variance on the workspace**: the SAME three booleans,
+     same config, same code, same machine, fresh process both times,
+     measured 136.6s in one run and 631.0s in another (~4.6x) — with no
+     other significant load visible (load avg ~1, single process at
+     ~100% CPU). OCC boolean wall-time on this shared Coder VM is NOT a
+     stable quantity.
+- Workaround: (1) `build_sandwich_body(include_hollow_interior=False)`
+  skips the hollow_common boolean for callers that only need the two
+  shells — the dev viewer export uses this (it renders only the shells);
+  the real P6 pipeline always computes it (ribs/spars are built inside
+  the hollow interior). (2) Never treat a single wall-clock measurement
+  as a config's true cost, and never use a wall-clock ratio between two
+  RUNS as evidence of a code regression — compare per-stage `timings_s`
+  ratios within the same run instead. A "gate suddenly got 4x slower"
+  observation on this workspace is noise until the per-stage breakdown
+  says otherwise.
+- Phase found: p06 (viewer-export integration of `backend/geometry/iml.py`).
+
+## cq.Shape.tessellate() doesn't dedupe vertices across face boundaries — a real watertight solid looks "non-manifold" to naive edge-count checks
+
+- Root cause: `cq.Shape.tessellate(tol)` concatenates each FACE's own
+  local `BRepMesh_IncrementalMesh` triangulation into one global
+  (vertices, triangles) pair WITHOUT merging coincident vertices at
+  shared face boundaries — two adjacent faces' triangulations each get
+  their OWN vertex indices for the same 3D point on their shared edge. A
+  naive "every edge (by vertex-index pair) must be shared by exactly 2
+  triangles" manifold check therefore sees every shared-face-boundary
+  edge as two DIFFERENT edges, each used only once, and reports a
+  false non-manifold failure — even on a solid P4's own gate already
+  proves watertight (found on te_half.yaml's `wing` body, P9 gate
+  development, `tests/gates/test_p09_export.py`).
+- Workaround: snap-merge tessellation vertices by rounded position
+  (round to 1e-4mm — tighter than `TESSELLATION_TOLERANCE_MM` so
+  genuinely distinct nearby vertices never wrongly merge, loose enough to
+  catch the exactly/near-coincident ones OCC's per-face tessellation
+  produces at a shared edge) BEFORE building the edge-adjacency map. See
+  `test_p09_export.py::_is_manifold_tessellation`.
+- Phase found: p09 (export gate, STL manifold-per-body check).
+
+## BRepExtrema_DistShapeShape between two full lofted solids is intractable — proximity-cull to face subsets first
+
+- Root cause: min-distance between two complete lofted wing bodies
+  (hundreds of narrow ruled faces each, from 199-point section wires) at
+  141 sweep angles blew an entire 10-hour pytest budget mid-sweep (P8
+  gate, `test_clearance_floor_and_monotonic_trend`, 36,312s on the one
+  test). The extrema search scales with the face-pair product; nothing
+  about the per-call API misuse — the workload itself is the problem.
+- Workaround: cull the static body to faces whose bbox comes within
+  `KINEMATIC_PROXIMITY_CULL_MARGIN_MM` (25mm) of the moving body's
+  rotation-swept bbox before ANY distance call
+  (`kinematics.proximity_face_subsets` + `sweep_min_distance`). Sound for
+  a floor assertion at any floor < margin: a culled face can never decide
+  pass/fail (see the constant's derivation). Also drop per-angle boolean
+  collision checks for skin-scale bodies — the swept-volume envelope test
+  proves CONTINUOUS collision-freedom, strictly stronger than sampling.
+- Phase found: p08 (`tests/gates/test_p08_kinematics.py`).
+
+## Mac->remote rsync silently clobbers the remote's own gate artifacts/state.json
+
+- Root cause: every code-push rsync this session used `--exclude`s for
+  `.git`/`node_modules`/`.venv`/`artifacts/cache`/`frontend/node_modules`
+  but NOT `artifacts/` itself — so pushing a code fix to the remote
+  workspace also overwrote the remote's OWN `artifacts/state.json` and
+  `artifacts/gates/*.json` (written by real gate runs ON the remote) with
+  the Mac's stale local copies. Found empirically: P09's gate genuinely
+  passed and recorded itself in the remote's state.json, then a later
+  rsync (pushing the P8 kinematics.py fix) silently reverted
+  `gates_passed` to the Mac's older list, losing the record — the P8 run
+  that followed appended "p08" onto the STALE list, producing
+  `[p00,p01,p02,p03,p04,p06,p08]` with p07 and p09 both missing despite
+  p09 having actually passed.
+- Workaround: gate artifacts flow ONE DIRECTION ONLY — remote-generated,
+  pulled back to the Mac (git source of truth) after each real run, NEVER
+  pushed from Mac to remote. Every code-push rsync must
+  `--exclude='artifacts/'` (the whole tree, not just `artifacts/cache`).
+  Recovered here by re-running the (cheap, ~7s) P09 gate for a fresh
+  timestamped record rather than hand-patching the JSON.
+- Phase found: p08/p09 (this session's autonomous verification cycles).
+
+## three.js GLTFLoader strips '/' from every loaded object's .name — exact-match lookups against the naming contract silently fail
+
+- Root cause: GLTFLoader internally sanitizes node/mesh names via
+  `PropertyBinding.sanitizeNodeName` — three.js uses `/` as an animation-
+  track path separator internally, so any `/` in a glTF node's declared
+  name is stripped before the `Object3D` is created. Confirmed directly
+  (P10 gate development): the exported glTF JSON genuinely has the full
+  contract-name string (`SEG-C/BODY-x/ROLE-y`, verified by reading the raw
+  file on the server), but the LOADED three.js object's `.name` is
+  `SEG-CBODY-xROLE-y` — `getObjectByName(contractName)` therefore never
+  matches anything, and the viewer silently shows zero bodies (no thrown
+  exception; GLTFLoader's own load succeeds fine).
+- Workaround: normalize both sides of the comparison client-side
+  (`stripSlashes()` in `frontend/src/Viewer.tsx`) — build a lookup keyed
+  by the object's OWN (sanitized) `.name` via one `traverse()`, then look
+  up each manifest body by its contract name with the same slash-stripping
+  applied. Never change the naming CONTRACT itself (docs/conventions.md —
+  STEP/DXF/report all still use the real `/`-bearing string); this is a
+  presentation-layer lookup fix only, confined to the glTF/three.js path.
+- Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
+  `scripts/r0_probes/probe_gltf_slash_names.py`).
+
+## cq.Assembly glTF export applies an implicit root-level Z-up->Y-up conversion — a naive world-space rotation matrix set as a node's LOCAL matrix rotates about the wrong axis
+
+- Root cause: glTF's spec mandates a Y-up coordinate convention; `cq.
+  Assembly.export(..., exportType="GLTF")` applies this as an ANCESTOR
+  transform on the exported scene graph (confirmed by dumping a CS body's
+  `matrixWorld` at rest, BEFORE any client-side rotation: a 90 degree
+  rotation matrix, not identity). `Object3D.matrix` in three.js is always
+  relative to the object's OWN PARENT, never world space — building a
+  rotation matrix directly from server-supplied `axis_p0`/`axis_dir`
+  (native Z-up, docs/conventions.md) and assigning it as a node's local
+  `.matrix` silently interpreted those coordinates in the node's
+  (Y-up-converted) PARENT frame instead of the native frame they're
+  actually expressed in. Produced a REAL but WRONG rotation — small,
+  nonzero displacement, not simply "no rotation applied" — which made it
+  hard to diagnose from the symptom alone; two rounds of hypothesis-and-
+  measure (React StrictMode double-mount, then several numeric-mismatch
+  theories) were both dead ends before dumping the raw `matrixWorld` data
+  made the coordinate-frame mismatch visible.
+- Workaround: transform `axis_p0` (a point — needs the FULL inverse of the
+  parent's `matrixWorld`) and `axis_dir` (a direction — needs only the
+  rotation part, `Vector3.transformDirection`) into each node's OWN parent
+  frame before building the rotation matrix, rather than assuming a flat/
+  identity parent hierarchy. Correct regardless of what the ancestor
+  transform actually is — never needed to reverse-engineer the Y-up
+  conversion explicitly. See `frontend/src/Viewer.tsx`'s deflection effect.
+- Phase found: p10 (`tests/gates/test_p10_web_e2e.py`,
+  `test_deflection_slider_matches_server_computed_position`).
+
+## Sandwich core body non-watertight on a moderately-twisted device config (P6 gate-scope gap, not a regression)
+
+- Root cause: unknown/unconfirmed — NOT root-caused, only observed. Running
+  `scripts/export_viewer_data.py` (the standalone diagnostic tool, not a
+  gate) against `tests/configs/devices/te_half_twisted_moderate.yaml`
+  fails at the very first sandwich volume check:
+  `AssertionError: sandwich core_upper: not watertight`, thrown by
+  `iml.build_sandwich_body`'s `core_upper` solid before ribs/spars/hinges
+  are even reached. `te_half.yaml` (identical pipeline, zero twist) builds
+  this same construction cleanly in the same run.
+- This is NOT a P6 gate regression: `test_p06_sandwich.py`/
+  `test_p06_ext_interlock.py` deliberately scope their real-boolean
+  battery to `te_half.yaml` only ("cost-driven scope decision, not a
+  shortcut" — each config costs tens of minutes even cache-hit). Extreme
+  taper is separately covered by `tests/configs/edge/high_taper.yaml`
+  during development, but no edge config exercises moderate TWIST on a
+  half-wing-with-device — this is a genuine coverage gap the gate battery
+  never claimed to close, not something that used to pass and broke.
+- Workaround: none yet — not investigated further this session (found
+  while regenerating diagnostic viewer data post-R1-close, not blocking
+  any gate). `scripts/export_viewer_data.py` now only targets `te_half`
+  explicitly until this is root-caused.
+- Phase found: post-R1 (viewer-data regen), config
+  `tests/configs/devices/te_half_twisted_moderate.yaml`. Worth a look
+  before/during P11, since segmentation adds break-plane cuts through the
+  same sandwich core construction — if twist-sensitivity is real, a
+  segmented+twisted config could hit it too.

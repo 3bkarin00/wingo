@@ -1,0 +1,11 @@
+{
+  "te_half_sandwich": {
+    "total_s": 916.7909996809904
+  },
+  "te_half": {
+    "cache_hit": false,
+    "ribs_s": 156.11317412099743,
+    "spar_slots_s": 11.70908426400274,
+    "pi_preforms_s": 151.60222883700044
+  }
+}

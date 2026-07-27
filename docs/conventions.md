@@ -33,7 +33,6 @@ the mechanism ends up").
 ## Signs
 
 - TE (trailing-edge) control surface: trailing-edge-down is positive deflection.
-- LE (leading-edge) droop nose: leading-edge-down is positive deflection.
 
 ## Airfoils
 

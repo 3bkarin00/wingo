@@ -3,6 +3,15 @@
   var DATA = window.VIEWER_DATA;
   var STRUCTURE = 0x4fb2e8;
   var KINEMATIC = 0xf5a742;
+  var SANDWICH = 0xa78bfa; // OUTER face-sheet shells — distinct from structure/kinematic (P6 WIP)
+  var SANDWICH_CORE = 0xf472b6; // core shells — distinct from face sheets AND the status red
+  var SANDWICH_INNER = 0x2dd4bf; // INNER face-sheet shells — third layer of the panel
+  var FALSE_SPAR = 0xa3e635; // device-cut closing wall — distinct from KINEMATIC's amber
+  var RIB_SOLID = 0xfb923c; // solid rib plates — distinct from every other P6 layer color
+  var SPAR_TRIMMED = 0xef4444; // IML-trimmed spar webs — distinct from the P3 wireframe spar's STRUCTURE blue
+  var MIDSURFACE = 0xfacc15; // FEA midsurface shells (skin/rib/spar) — bright yellow, distinct from every solid layer
+  var HINGE_CARRIER = 0x38bdf8; // hinge carrier blocks (ADR-005) — sky blue, distinct from STRUCTURE's spar blue
+  var HINGE_TUBE = 0xe879f9; // hinge tube segments (ADR-005) — magenta, distinct from every other P7/P6 layer color
 
   var canvas = document.getElementById("gl");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -96,51 +105,20 @@
     return mesh;
   }
 
-  // ---- assemble scene from VIEWER_DATA ------------------------------------
+  function disposeGroup(group) {
+    group.traverse(function (obj) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach(function (m) { m.dispose(); });
+      }
+    });
+  }
 
-  var layers = {};
-
-  layers.oml = indexedMesh(DATA.oml, STRUCTURE, 0.32);
-  root.add(layers.oml);
-
-  Object.keys(DATA.spars).forEach(function (name) {
-    var g = indexedMesh(DATA.spars[name], STRUCTURE, 0.85);
-    root.add(g);
-    layers["spar_" + name] = g;
-  });
-
-  var ribGroup = new THREE.Group();
-  DATA.rib_planes.forEach(function (rib) { ribGroup.add(ribPlane(rib, STRUCTURE)); });
-  root.add(ribGroup);
-  layers.ribs = ribGroup;
-
-  var hingeRadius = Math.max(2, DATA.half_span_mm * 0.0025);
-  var hingeGroup = new THREE.Group();
-  Object.keys(DATA.hinge_axes).forEach(function (name) {
-    var pts = DATA.hinge_axes[name];
-    hingeGroup.add(axisRod(pts[0], pts[1], KINEMATIC, hingeRadius));
-  });
-  root.add(hingeGroup);
-  layers.hinges = hingeGroup;
-
-  var hpGroup = new THREE.Group();
-  var hpRadius = Math.max(3, DATA.half_span_mm * 0.006);
-  DATA.hardpoints.forEach(function (p) { hpGroup.add(hardpointMarker(p, KINEMATIC, hpRadius)); });
-  root.add(hpGroup);
-  layers.hardpoints = hpGroup;
-
-  // ---- fit camera to model -------------------------------------------------
-
-  var box = new THREE.Box3().setFromObject(root);
-  var sphere = box.getBoundingSphere(new THREE.Sphere());
-  var target = sphere.center.clone();
-  var radius = Math.max(sphere.radius, 50);
+  // ---- camera: fit-to-model + hand-rolled orbit controls -------------------
 
   var theta = Math.PI * 0.32;
   var phi = Math.PI * 0.38;
-  var camRadius = radius * 2.4;
-  var minRadius = radius * 0.4;
-  var maxRadius = radius * 8;
+  var camRadius = 1000, minRadius = 100, maxRadius = 8000, target = new THREE.Vector3();
 
   function updateCamera() {
     var x = target.x + camRadius * Math.sin(phi) * Math.sin(theta);
@@ -150,9 +128,17 @@
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
   }
-  updateCamera();
 
-  // ---- hand-rolled orbit controls (drag to orbit, wheel to zoom) ---------
+  function fitCameraToRoot() {
+    var box = new THREE.Box3().setFromObject(root);
+    var sphere = box.getBoundingSphere(new THREE.Sphere());
+    target = sphere.center.clone();
+    var radius = Math.max(sphere.radius, 50);
+    camRadius = radius * 2.4;
+    minRadius = radius * 0.4;
+    maxRadius = radius * 8;
+    updateCamera();
+  }
 
   var dragging = false, lastX = 0, lastY = 0;
   canvas.addEventListener("pointerdown", function (e) {
@@ -178,8 +164,6 @@
     updateCamera();
   }, { passive: false });
 
-  // ---- resize --------------------------------------------------------------
-
   function resize() {
     var w = canvas.clientWidth, h = canvas.clientHeight;
     renderer.setSize(w, h, false);
@@ -194,65 +178,462 @@
     renderer.render(scene, camera);
   })();
 
-  // ---- sidebar: build layer rows from what was actually exported ----------
+  // ---- live hinge deflection (rotates the CS about the REAL hinge axis,   --
+  // ---- not a pre-baked snapshot — this is the same rigid rotation the P4  --
+  // ---- gate applies to prove clearance holds at every angle) ---------------
 
-  var layerRows = [["oml", "Outer Mold Line", STRUCTURE]];
-  Object.keys(DATA.spars).forEach(function (name) {
-    layerRows.push(["spar_" + name, name.charAt(0).toUpperCase() + name.slice(1) + " Spar", STRUCTURE]);
-  });
-  layerRows.push(["ribs", "Rib Planes (" + DATA.rib_planes.length + ")", STRUCTURE]);
-  if (Object.keys(DATA.hinge_axes).length) {
-    layerRows.push(["hinges", "Hinge Axes", KINEMATIC]);
-  }
-  if (DATA.hardpoints.length) {
-    layerRows.push(["hardpoints", "Hardpoints (" + DATA.hardpoints.length + ")", KINEMATIC]);
+  var deflectionPivot = null; // THREE.Group whose origin sits at the hinge point
+  var currentHingeDir = null;
+
+  function setDeflectionDeg(deg) {
+    if (!deflectionPivot || !currentHingeDir) return;
+    deflectionPivot.setRotationFromAxisAngle(currentHingeDir, (deg * Math.PI) / 180);
   }
 
-  var listEl = document.getElementById("layer-list");
-  layerRows.forEach(function (row) {
-    var key = row[0], label = row[1], color = row[2];
-    var wrap = document.createElement("label");
-    wrap.className = "layer-row";
-    var hex = "#" + color.toString(16).padStart(6, "0");
-    wrap.innerHTML =
-      '<input type="checkbox" checked>' +
-      '<span class="swatch" style="background:' + hex + '"></span>' +
-      '<span class="layer-name">' + label + "</span>";
-    wrap.querySelector("input").addEventListener("change", function (e) {
-      if (layers[key]) layers[key].visible = e.target.checked;
-    });
-    listEl.appendChild(wrap);
-  });
+  // ---- sidebar builders ------------------------------------------------
 
-  // ---- header + capability list -----------------------------------------
-
-  document.getElementById("config-name").textContent = DATA.config_name + ".yaml";
+  var layerListEl = document.getElementById("layer-list");
   var capsEl = document.getElementById("capabilities");
-  DATA.capabilities.forEach(function (line) {
-    var div = document.createElement("div");
-    var m = line.match(/^(P\d+):\s*(.*)$/);
-    div.innerHTML = m ? "<b>" + m[1] + "</b> " + m[2] : line;
-    capsEl.appendChild(div);
-  });
-
-  // ---- stats readout ---------------------------------------------------------
-
-  var triCount = DATA.oml.triangles.length;
-  Object.keys(DATA.spars).forEach(function (n) { triCount += DATA.spars[n].triangles.length; });
-
-  var statLines = [
-    ["config", DATA.config_name],
-    ["half-span", DATA.half_span_mm.toFixed(0) + " mm"],
-    ["triangles", triCount.toLocaleString()],
-    ["rib planes", String(DATA.rib_planes.length)],
-    ["hinge axes", String(Object.keys(DATA.hinge_axes).length)],
-    ["hardpoints", String(DATA.hardpoints.length)],
-  ];
   var statsEl = document.getElementById("stats");
-  statLines.forEach(function (pair) {
+  var gateEl = document.getElementById("gate-metrics");
+  var deflectionRow = document.getElementById("deflection-row");
+  var deflectionSlider = document.getElementById("deflection-slider");
+  var deflectionLabel = document.getElementById("deflection-label");
+  var curvaturePanel = document.getElementById("curvature-panel");
+  var curvatureStationSelect = document.getElementById("curvature-station-select");
+  var curvatureBadge = document.getElementById("curvature-badge");
+  var curvatureCanvas = document.getElementById("curvature-canvas");
+  var curvatureReadout = document.getElementById("curvature-readout");
+  var rejectedPanel = document.getElementById("rejected-panel");
+  var rejectedList = document.getElementById("rejected-list");
+  var sandwichPanel = document.getElementById("sandwich-panel");
+  var sandwichWarning = document.getElementById("sandwich-warning");
+
+  function statRow(container, k, v) {
     var row = document.createElement("div");
     row.className = "stat-row";
-    row.innerHTML = '<span class="stat-key">' + pair[0] + '</span><span class="stat-val">' + pair[1] + "</span>";
-    statsEl.appendChild(row);
+    row.innerHTML = '<span class="stat-key">' + k + '</span><span class="stat-val">' + v + "</span>";
+    container.appendChild(row);
+  }
+
+  // ---- nose curvature chart (canvas) — the exact diagnostic that caught  --
+  // ---- and confirmed the fix for the lumpy-nose defect (ADR-003)         --
+
+  var curvatureStations = []; // current config's te_cut.curvature_check.stations
+  var curvatureHoverIdx = -1;
+
+  function drawCurvatureChart(station) {
+    var ctx = curvatureCanvas.getContext("2d");
+    var w = curvatureCanvas.width, h = curvatureCanvas.height;
+    var pad = { l: 34, r: 10, t: 10, b: 16 };
+    var plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    var kink = station.kink_deg;
+
+    ctx.clearRect(0, 0, w, h);
+
+    var maxVal = Math.max.apply(null, kink);
+    var scaleMax = Math.max(maxVal * 1.2, station.mean_deg * 1.4, 0.02);
+
+    function x(i) { return pad.l + (i / (kink.length - 1)) * plotW; }
+    function y(v) { return pad.t + plotH - (v / scaleMax) * plotH; }
+
+    // axes
+    ctx.strokeStyle = "rgba(124, 134, 152, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t);
+    ctx.lineTo(pad.l, pad.t + plotH);
+    ctx.lineTo(pad.l + plotW, pad.t + plotH);
+    ctx.stroke();
+
+    // mean reference (dashed) — "flat at the mean" is the smooth signature
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "rgba(124, 134, 152, 0.55)";
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y(station.mean_deg));
+    ctx.lineTo(pad.l + plotW, y(station.mean_deg));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // data line
+    ctx.strokeStyle = "#f5a742";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    kink.forEach(function (v, i) {
+      var px = x(i), py = y(v);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // hover crosshair + point
+    if (curvatureHoverIdx >= 0 && curvatureHoverIdx < kink.length) {
+      var hx = x(curvatureHoverIdx), hy = y(kink[curvatureHoverIdx]);
+      ctx.strokeStyle = "rgba(221, 227, 238, 0.3)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(hx, pad.t);
+      ctx.lineTo(hx, pad.t + plotH);
+      ctx.stroke();
+      ctx.fillStyle = "#f5a742";
+      ctx.beginPath();
+      ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // axis labels
+    ctx.fillStyle = "#7c8698";
+    ctx.font = "9.5px ui-monospace, monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(scaleMax.toFixed(2) + "°", pad.l - 5, pad.t + 8);
+    ctx.fillText("0°", pad.l - 5, pad.t + plotH + 2);
+    ctx.textAlign = "left";
+    ctx.fillText("Pl-side", pad.l, h - 3);
+    ctx.textAlign = "right";
+    ctx.fillText("Pu-side", pad.l + plotW, h - 3);
+  }
+
+  function updateCurvatureReadout(station) {
+    if (curvatureHoverIdx >= 0 && curvatureHoverIdx < station.kink_deg.length) {
+      curvatureReadout.textContent =
+        "point " + curvatureHoverIdx + "/" + station.kink_deg.length +
+        ": " + station.kink_deg[curvatureHoverIdx].toFixed(3) + "° (mean " + station.mean_deg.toFixed(3) + "°)";
+    } else {
+      curvatureReadout.textContent = "mean " + station.mean_deg.toFixed(3) + "° across " + station.kink_deg.length + " points — hover the chart to inspect a point";
+    }
+  }
+
+  curvatureCanvas.addEventListener("mousemove", function (e) {
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (!station) return;
+    var rect = curvatureCanvas.getBoundingClientRect();
+    var px = (e.clientX - rect.left) * (curvatureCanvas.width / rect.width);
+    var pad = { l: 34, r: 10 };
+    var plotW = curvatureCanvas.width - pad.l - pad.r;
+    var frac = Math.min(Math.max((px - pad.l) / plotW, 0), 1);
+    curvatureHoverIdx = Math.round(frac * (station.kink_deg.length - 1));
+    drawCurvatureChart(station);
+    updateCurvatureReadout(station);
   });
+  curvatureCanvas.addEventListener("mouseleave", function () {
+    curvatureHoverIdx = -1;
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (station) { drawCurvatureChart(station); updateCurvatureReadout(station); }
+  });
+
+  function renderCurvatureStation() {
+    var station = curvatureStations[curvatureStationSelect.selectedIndex];
+    if (!station) return;
+    curvatureHoverIdx = -1;
+    drawCurvatureChart(station);
+    updateCurvatureReadout(station);
+    var good = station.spike_ratio < 1.5; // matches the gate's own bound (test_nose_surface_smoothness)
+    curvatureBadge.textContent = station.spike_ratio.toFixed(2) + "x spike";
+    curvatureBadge.className = "spike-badge " + (good ? "good" : "attention");
+  }
+
+  function updateCurvaturePanel(data) {
+    var check = data.te_cut && data.te_cut.curvature_check;
+    if (!check) {
+      curvaturePanel.style.display = "none";
+      return;
+    }
+    curvaturePanel.style.display = "";
+    curvatureStations = check.stations;
+    curvatureStationSelect.innerHTML = "";
+    check.stations.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.textContent = s.label + " (spanwise)";
+      curvatureStationSelect.appendChild(opt);
+    });
+    curvatureStationSelect.selectedIndex = Math.floor(check.stations.length / 2); // default: mid-span
+    renderCurvatureStation();
+  }
+
+  curvatureStationSelect.addEventListener("change", renderCurvatureStation);
+
+  var layers = {};
+
+  function rebuildSidebar(data) {
+    capsEl.innerHTML = "";
+    data.capabilities.forEach(function (line) {
+      var div = document.createElement("div");
+      var m = line.match(/^(P\d+):\s*(.*)$/);
+      div.innerHTML = m ? "<b>" + m[1] + "</b> " + m[2] : line;
+      capsEl.appendChild(div);
+    });
+
+    layerListEl.innerHTML = "";
+    var layerRows = data.te_cut
+      ? [["wing", "Wing (fixed)", STRUCTURE], ["cs", "Control Surface", KINEMATIC]]
+      : [["oml", "Outer Mold Line", STRUCTURE]];
+    Object.keys(data.spars).forEach(function (name) {
+      layerRows.push(["spar_" + name, name.charAt(0).toUpperCase() + name.slice(1) + " Spar", STRUCTURE]);
+    });
+    layerRows.push(["ribs", "Rib Planes (" + data.rib_planes.length + ")", STRUCTURE]);
+    if (Object.keys(data.hinge_axes).length) {
+      layerRows.push(["hinge_axes_display", "Hinge Axes", KINEMATIC]);
+    }
+    if (data.hardpoints.length) {
+      layerRows.push(["hardpoints", "Hardpoints (" + data.hardpoints.length + ")", KINEMATIC]);
+    }
+    if (data.sandwich) {
+      layerRows.push(["sandwich_face_outer_upper", "Upper outer face (P6 WIP)", SANDWICH]);
+      layerRows.push(["sandwich_face_outer_lower", "Lower outer face (P6 WIP)", SANDWICH]);
+      layerRows.push(["sandwich_core_upper", "Upper core (P6 WIP)", SANDWICH_CORE]);
+      layerRows.push(["sandwich_core_lower", "Lower core (P6 WIP)", SANDWICH_CORE]);
+      layerRows.push(["sandwich_face_inner_upper", "Upper inner face (P6 WIP)", SANDWICH_INNER]);
+      layerRows.push(["sandwich_face_inner_lower", "Lower inner face (P6 WIP)", SANDWICH_INNER]);
+      layerRows.push(["sandwich_false_spar", "False spar (P6 WIP)", FALSE_SPAR]);
+      var ribKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_rib_") === 0; });
+      if (ribKeys.length) {
+        layerRows.push(["sandwich_ribs", "Ribs (" + ribKeys.length + ", P6 WIP)", RIB_SOLID]);
+      }
+      var sparTrimKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_spar_trimmed_") === 0; });
+      if (sparTrimKeys.length) {
+        layerRows.push(["sandwich_spars_trimmed", "Trimmed spars (" + sparTrimKeys.length + ", P6 WIP)", SPAR_TRIMMED]);
+      }
+      var midsurfaceKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_midsurface_") === 0; });
+      if (midsurfaceKeys.length) {
+        layerRows.push(["sandwich_midsurfaces", "Midsurfaces (" + midsurfaceKeys.length + ", P6 WIP)", MIDSURFACE]);
+      }
+      var hingeCarrierKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_carrier_") > 0; });
+      if (hingeCarrierKeys.length) {
+        layerRows.push(["sandwich_hinge_carriers", "Hinge carriers (" + hingeCarrierKeys.length + ", P7)", HINGE_CARRIER]);
+      }
+      var hingeTubeKeys = Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_tube_") > 0; });
+      if (hingeTubeKeys.length) {
+        layerRows.push(["sandwich_hinge_tubes", "Hinge tubes (" + hingeTubeKeys.length + ", P7)", HINGE_TUBE]);
+      }
+    }
+    layerRows.forEach(function (row) {
+      var rowKey = row[0], label = row[1], color = row[2];
+      var wrap = document.createElement("label");
+      wrap.className = "layer-row";
+      var hex = "#" + color.toString(16).padStart(6, "0");
+      wrap.innerHTML =
+        '<input type="checkbox" checked>' +
+        '<span class="swatch" style="background:' + hex + '"></span>' +
+        '<span class="layer-name">' + label + "</span>";
+      wrap.querySelector("input").addEventListener("change", function (e) {
+        if (layers[rowKey]) layers[rowKey].visible = e.target.checked;
+      });
+      layerListEl.appendChild(wrap);
+    });
+
+    var triCount = data.te_cut
+      ? data.te_cut.wing.triangles.length + data.te_cut.control_surface.triangles.length
+      : data.oml.triangles.length;
+    Object.keys(data.spars).forEach(function (n) { triCount += data.spars[n].triangles.length; });
+
+    statsEl.innerHTML = "";
+    statRow(statsEl, "config", data.config_name);
+    statRow(statsEl, "half-span", data.half_span_mm.toFixed(0) + " mm");
+    statRow(statsEl, "triangles", triCount.toLocaleString());
+    statRow(statsEl, "rib planes", String(data.rib_planes.length));
+    statRow(statsEl, "hinge axes", String(Object.keys(data.hinge_axes).length));
+    if (data.te_cut) {
+      statRow(statsEl, "bodies", "2 (wing + control surf)");
+      statRow(statsEl, "nose radius R range", data.te_cut.nose_radius_range_mm.join("–") + " mm");
+      statRow(statsEl, "cove clearance target", data.te_cut.cove_clearance_target_mm + " mm");
+      statRow(statsEl, "anti-unporting margin", data.te_cut.overlap_margin_deg + "°");
+    } else {
+      statRow(statsEl, "hardpoints", String(data.hardpoints.length));
+    }
+
+    gateEl.innerHTML = "";
+    var gm = data.te_cut && data.te_cut.gate_metrics;
+    if (gm) {
+      gateEl.style.display = "";
+      statRow(gateEl, "nose tangency (mean-R)", gm.nose_tangency.worst_mean_radius_err_deg + "° (< 2.0°)");
+      statRow(gateEl, "nose single-arc dev", gm.nose_is_single_arc.worst_radius_dev_mm + " mm");
+      statRow(gateEl, "cove clearance @ 0°", gm.cove_clearance_mm.rest + " mm");
+      statRow(gateEl, "cove clearance @ +max", gm.cove_clearance_mm.deflected + " mm");
+      statRow(gateEl, "no-unporting margin", gm.no_unporting_worst_margin_deg + "°");
+      statRow(gateEl, "volume conservation", gm.conservation_pct + "%");
+      statRow(gateEl, "shards (F3)", String(gm.shards));
+    } else {
+      gateEl.style.display = "none";
+    }
+
+    if (data.te_cut) {
+      deflectionRow.style.display = "";
+      var maxDefl = data.te_cut.max_deflection_deg;
+      deflectionSlider.min = -maxDefl;
+      deflectionSlider.max = maxDefl;
+      deflectionSlider.step = Math.max(0.5, maxDefl / 100);
+      deflectionSlider.value = 0;
+      deflectionLabel.textContent = "0.0°";
+    } else {
+      deflectionRow.style.display = "none";
+    }
+
+    updateCurvaturePanel(data);
+
+    if (data.sandwich) {
+      sandwichPanel.style.display = "";
+      var dw = data.sandwich.device_window_y_mm;
+      sandwichWarning.textContent = data.sandwich.warning + " Device window: y ∈ [" +
+        dw[0] + ", " + dw[1] + "] mm.";
+    } else {
+      sandwichPanel.style.display = "none";
+    }
+  }
+
+  // ---- scene assembly (re-invokable so a config switch rebuilds in place) --
+
+  function buildScene(data) {
+    disposeGroup(root);
+    root.clear();
+    layers = {};
+    deflectionPivot = null;
+    currentHingeDir = null;
+
+    if (data.te_cut) {
+      layers.wing = indexedMesh(data.te_cut.wing, STRUCTURE, 0.28);
+      root.add(layers.wing);
+
+      var csMesh = indexedMesh(data.te_cut.control_surface, KINEMATIC, 0.9);
+      var hp = data.te_cut.hinge_point, hd = data.te_cut.hinge_dir;
+      deflectionPivot = new THREE.Group();
+      deflectionPivot.position.set(hp[0], hp[1], hp[2]);
+      csMesh.position.set(-hp[0], -hp[1], -hp[2]);
+      deflectionPivot.add(csMesh);
+      root.add(deflectionPivot);
+      currentHingeDir = new THREE.Vector3(hd[0], hd[1], hd[2]).normalize();
+      layers.cs = deflectionPivot; // toggling visibility hides the pivot + its CS child
+    } else {
+      layers.oml = indexedMesh(data.oml, STRUCTURE, 0.32);
+      root.add(layers.oml);
+    }
+
+    Object.keys(data.spars).forEach(function (name) {
+      var g = indexedMesh(data.spars[name], STRUCTURE, 0.85);
+      root.add(g);
+      layers["spar_" + name] = g;
+    });
+
+    var ribGroup = new THREE.Group();
+    data.rib_planes.forEach(function (rib) { ribGroup.add(ribPlane(rib, STRUCTURE)); });
+    root.add(ribGroup);
+    layers.ribs = ribGroup;
+
+    var hingeRadius = Math.max(2, data.half_span_mm * 0.0025);
+    var hingeAxesGroup = new THREE.Group();
+    Object.keys(data.hinge_axes).forEach(function (name) {
+      var pts = data.hinge_axes[name];
+      hingeAxesGroup.add(axisRod(pts[0], pts[1], KINEMATIC, hingeRadius));
+    });
+    root.add(hingeAxesGroup);
+    layers.hinge_axes_display = hingeAxesGroup;
+
+    var hpGroup = new THREE.Group();
+    var hpRadius = Math.max(3, data.half_span_mm * 0.006);
+    data.hardpoints.forEach(function (p) { hpGroup.add(hardpointMarker(p, KINEMATIC, hpRadius)); });
+    root.add(hpGroup);
+    layers.hardpoints = hpGroup;
+
+    if (data.sandwich) {
+      [["sandwich_face_outer_upper", "wing_face_outer_upper", SANDWICH, 0.5],
+       ["sandwich_face_outer_lower", "wing_face_outer_lower", SANDWICH, 0.5],
+       ["sandwich_core_upper", "wing_core_upper", SANDWICH_CORE, 0.75],
+       ["sandwich_core_lower", "wing_core_lower", SANDWICH_CORE, 0.75],
+       ["sandwich_face_inner_upper", "wing_face_inner_upper", SANDWICH_INNER, 0.85],
+       ["sandwich_face_inner_lower", "wing_face_inner_lower", SANDWICH_INNER, 0.85],
+       ["sandwich_false_spar", "wing_false_spar", FALSE_SPAR, 0.9]].forEach(function (row) {
+        var mesh = indexedMesh(data.sandwich[row[1]], row[2], row[3]);
+        root.add(mesh);
+        layers[row[0]] = mesh;
+      });
+
+      var ribGroupSolid = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_rib_") === 0; })
+        .forEach(function (key) { ribGroupSolid.add(indexedMesh(data.sandwich[key], RIB_SOLID, 0.8)); });
+      if (ribGroupSolid.children.length) {
+        root.add(ribGroupSolid);
+        layers.sandwich_ribs = ribGroupSolid;
+      }
+
+      var sparTrimGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_spar_trimmed_") === 0; })
+        .forEach(function (key) { sparTrimGroup.add(indexedMesh(data.sandwich[key], SPAR_TRIMMED, 0.85)); });
+      if (sparTrimGroup.children.length) {
+        root.add(sparTrimGroup);
+        layers.sandwich_spars_trimmed = sparTrimGroup;
+      }
+
+      var midsurfaceGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("wing_midsurface_") === 0; })
+        .forEach(function (key) { midsurfaceGroup.add(indexedMesh(data.sandwich[key], MIDSURFACE, 0.6)); });
+      if (midsurfaceGroup.children.length) {
+        root.add(midsurfaceGroup);
+        layers.sandwich_midsurfaces = midsurfaceGroup;
+      }
+
+      // Pin-and-tube ROLE-typed hinge layers (ADR-005): carriers + tubes,
+      // wing-side and CS-side pooled per role so toggles stay two rows.
+      var hingeCarrierGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_carrier_") > 0; })
+        .forEach(function (key) { hingeCarrierGroup.add(indexedMesh(data.sandwich[key], HINGE_CARRIER, 0.9)); });
+      if (hingeCarrierGroup.children.length) {
+        root.add(hingeCarrierGroup);
+        layers.sandwich_hinge_carriers = hingeCarrierGroup;
+      }
+
+      var hingeTubeGroup = new THREE.Group();
+      Object.keys(data.sandwich).filter(function (k) { return k.indexOf("_hinge_tube_") > 0; })
+        .forEach(function (key) { hingeTubeGroup.add(indexedMesh(data.sandwich[key], HINGE_TUBE, 0.9)); });
+      if (hingeTubeGroup.children.length) {
+        root.add(hingeTubeGroup);
+        layers.sandwich_hinge_tubes = hingeTubeGroup;
+      }
+    }
+
+    fitCameraToRoot();
+    rebuildSidebar(data);
+    document.getElementById("config-name").textContent = data.config_name + ".yaml";
+  }
+
+  // ---- rejected configs (global, not per-config-switch — ADR-003's        --
+  // ---- config-time validation firing correctly on a deliberately too-     --
+  // ---- aggressive twist/hinge_xc combination) -------------------------------
+
+  (function renderRejectedPanel() {
+    var rejected = DATA.rejected || {};
+    var stems = Object.keys(rejected);
+    if (!stems.length) { rejectedPanel.style.display = "none"; return; }
+    rejectedPanel.style.display = "";
+    rejectedList.innerHTML = "";
+    stems.forEach(function (stem) {
+      var item = document.createElement("div");
+      item.className = "rejected-item";
+      item.innerHTML =
+        '<div class="rejected-name">' + stem + ".yaml</div>" +
+        '<div class="rejected-reason">' + rejected[stem].message + "</div>";
+      rejectedList.appendChild(item);
+    });
+  })();
+
+  // ---- config switcher -----------------------------------------------------
+
+  var configSelect = document.getElementById("config-select");
+  Object.keys(DATA.configs).forEach(function (stem) {
+    var opt = document.createElement("option");
+    opt.value = stem;
+    opt.textContent = stem;
+    configSelect.appendChild(opt);
+  });
+  configSelect.value = DATA.default_config;
+  configSelect.addEventListener("change", function () {
+    buildScene(DATA.configs[configSelect.value]);
+  });
+
+  deflectionSlider.addEventListener("input", function () {
+    var deg = parseFloat(deflectionSlider.value);
+    deflectionLabel.textContent = deg.toFixed(1) + "°";
+    setDeflectionDeg(deg);
+  });
+
+  buildScene(DATA.configs[DATA.default_config]);
 })();

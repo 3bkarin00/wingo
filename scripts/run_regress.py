@@ -44,7 +44,7 @@ def main() -> int:
         rel = [str(p.relative_to(ROOT)) for p in gate_files]
         print(f"--- regress: {phase} ({', '.join(rel)}) ---")
         result = subprocess.run(
-            [str(ROOT / ".venv" / "bin" / "pytest"), *rel, "-v"], cwd=ROOT
+            [str(ROOT / ".venv" / "bin" / "pytest"), *rel, "-v", "--durations=20"], cwd=ROOT
         )
         if result.returncode != 0:
             failures.append(phase)

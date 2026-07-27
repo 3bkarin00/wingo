@@ -50,16 +50,6 @@ te_surface:
   max_deflection_deg: 25
   hinges: {mode: generated, count: 3, cots_pin_dia_mm: 3.0}
 
-le_droop:
-  enabled: true
-  span_start_frac: 0.10
-  span_end_frac: 0.55
-  hinge_xc_start: 0.15
-  hinge_xc_end: 0.15
-  gap_mm: 1.5
-  max_deflection_deg: 20
-  hinges: {mode: generated, count: 2}
-
 hardpoints:
   auto: [hinge_lands, joint_housing_zones, fuselage_bosses]
   fuselage_attachment:

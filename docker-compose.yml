@@ -25,8 +25,13 @@ services:
       timeout: 3s
       retries: 10
 
-# api/worker/report/frontend services are added in the phase that builds
-# their first real image (see docs/decisions — P0 scope note in changelog.md).
+# api/frontend (P10): run as plain dev-server PROCESSES via the Makefile
+# (`make run-api` / `cd frontend && npm run dev`), the same posture every
+# gate already uses for pytest itself (.venv, not a container) — no
+# Dockerfile exists for either yet, a deliberate scope choice (writing an
+# untestable-right-now Dockerfile blind is worse than not writing one).
+# worker/report services are added in the phase that builds their first
+# real image (see docs/decisions — P0 scope note in changelog.md).
 
 volumes:
   pgdata:

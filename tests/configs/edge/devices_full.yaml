@@ -1,5 +1,6 @@
-# Edge: full device config — TE surface + LE droop on a single-segment wing.
-# Exercises hinge axis containment (F5) and forced rib planes at device edges.
+# Edge: full device config — TE surface on a single-segment wing (LE droop
+# dropped, ADR-004). Exercises hinge axis containment (F5) and forced rib
+# planes at device edges.
 planform:
   span_mm: 2400
   segments: [{name: whole, y_end_frac: 1.0, dihedral_deg: 0.0, sweep_le_deg: 0.0}]
@@ -22,7 +23,4 @@ ribs: {count: 9, construction: {material: cfrp_200gsm_twill, plies: 3}, lighteni
 te_surface: {enabled: true, span_start_frac: 0.55, span_end_frac: 0.95,
              hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
              max_deflection_deg: 25, hinges: {mode: generated, count: 3}}
-le_droop:   {enabled: true, span_start_frac: 0.10, span_end_frac: 0.50,
-             hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
-             max_deflection_deg: 20, hinges: {mode: generated, count: 2}}
 output: {formats: [step, stl, gltf]}

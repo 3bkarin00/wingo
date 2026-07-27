@@ -31,25 +31,14 @@ def _enabled_devices(config: "Config") -> list[tuple[str, "DeviceWindow"]]:
     devices = []
     if config.te_surface is not None and config.te_surface.enabled:
         devices.append(("te_surface", config.te_surface))
-    if config.le_droop is not None and config.le_droop.enabled:
-        devices.append(("le_droop", config.le_droop))
     return devices
 
 
 def validate_device_windows(config: "Config") -> None:
-    """D4: device windows non-overlapping (TE vs LE) and segment-contained."""
+    """D4: device window segment-contained. (LE droop dropped, ADR-004 — with
+    a single device type there is nothing left to overlap, so the former
+    TE-vs-LE span-overlap check was removed as vacuous.)"""
     devices = _enabled_devices(config)
-
-    # Non-overlapping (span-wise) between TE and LE windows.
-    if len(devices) == 2:
-        (_, a), (_, b) = devices
-        if a.span_start_frac < b.span_end_frac and b.span_start_frac < a.span_end_frac:
-            raise ConfigValidationError(
-                ConfigErrorCode.DEVICE_WINDOW_OVERLAP,
-                "te_surface and le_droop span windows overlap "
-                f"({a.span_start_frac}-{a.span_end_frac} vs "
-                f"{b.span_start_frac}-{b.span_end_frac}); device windows must not overlap (D4)",
-            )
 
     # Segment-contained: each device window must sit fully inside one segment.
     # Segments partition [0, 1] with no gaps, so this is also exactly the
@@ -74,9 +63,8 @@ def validate_device_windows(config: "Config") -> None:
 
 
 def validate_hinge_vs_spar(config: "Config") -> None:
-    """TE hinge must be aft of the rear spar (+clearance); LE hinge must be
-    forward of the main spar (+clearance). Schema-level xc comparison only —
-    real OML containment is P3 (F5)."""
+    """TE hinge must be aft of the rear spar (+clearance). Schema-level xc
+    comparison only — real OML containment is P3 (F5)."""
     clearance = tolerances.HINGE_SPAR_XC_CLEARANCE_FRAC
     spars_by_name = {s.name: s for s in config.spars}
 
@@ -93,21 +81,6 @@ def validate_hinge_vs_spar(config: "Config") -> None:
                         ConfigErrorCode.TE_HINGE_TOO_FAR_FORWARD,
                         f"te_surface.{label}={hinge_xc} must be >= rear spar xc "
                         f"({max(rear.xc_root, rear.xc_tip)}) + clearance ({clearance})",
-                    )
-
-    if config.le_droop is not None and config.le_droop.enabled:
-        main = spars_by_name.get("main")
-        if main is not None:
-            max_xc = min(main.xc_root, main.xc_tip) - clearance
-            for label, hinge_xc in (
-                ("hinge_xc_start", config.le_droop.hinge_xc_start),
-                ("hinge_xc_end", config.le_droop.hinge_xc_end),
-            ):
-                if hinge_xc > max_xc:
-                    raise ConfigValidationError(
-                        ConfigErrorCode.LE_HINGE_TOO_FAR_AFT,
-                        f"le_droop.{label}={hinge_xc} must be <= main spar xc "
-                        f"({min(main.xc_root, main.xc_tip)}) - clearance ({clearance})",
                     )
 
 
