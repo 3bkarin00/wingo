@@ -8,6 +8,9 @@ Used for live preview while dragging sliders. Returns the OML solid immediately.
 **Full path** (`build_full`): the existing pipeline — loft + watertight +
 volume + reference geometry. Used on commit/export.
 
+**Incremental path** (`build_incremental`): uses the dependency graph to rebuild
+only affected nodes when a station parameter changes.
+
 The existing `loft.py` and `sections.py` stay as-is; this module wraps them
 and decides which checks to run.
 """
@@ -26,6 +29,21 @@ from backend.geometry.loft import (
 from backend.geometry.reference import build_reference_geometry
 from backend.geometry.sections import build_planform_sections
 from backend.schema.models import Config
+
+# Lazy import for dependency graph (optional optimization)
+_WING_GRAPH = None
+
+
+def _get_wing_graph() -> Any:
+    """Lazy import of WingDependencyGraph."""
+    global _WING_GRAPH
+    if _WING_GRAPH is None:
+        try:
+            from backend.core.wing_graph import WingDependencyGraph
+            _WING_GRAPH = WingDependencyGraph
+        except ImportError:
+            _WING_GRAPH = None
+    return _WING_GRAPH
 
 
 @dataclass
@@ -179,16 +197,73 @@ def build_full(config: Config) -> BuildResult:
     )
 
 
-def build(config: Config, mode: str = "full") -> BuildResult:
+def build_incremental(config: Config, station_index: int, **kwargs: Any) -> BuildResult:
+    """Incremental build: update a single station and rebuild only affected nodes.
+
+    Uses the dependency graph to rebuild only the changed station and downstream
+    nodes (loft, watertight, volume, reference) — avoiding rebuilding all stations.
+
+    Args:
+        config: validated wing configuration.
+        station_index: which station to update (0-based).
+        **kwargs: station parameters to change (chord_mm, twist_deg, airfoil, y_frac).
+
+    Returns:
+        BuildResult with updated solid and metrics.
+    """
+    WingGraph = _get_wing_graph()
+    if WingGraph is None:
+        # Fallback: full rebuild if dependency graph not available
+        return build_full(config)
+
+    # Create or reuse a wing graph
+    graph = WingGraph(config)
+
+    # Update the station parameters
+    result = graph.update_station(station_index, **kwargs)
+
+    if result.get("status") != "incremental" or result.get("solid") is None:
+        # Rebuild failed, fall back to full
+        return build_full(config)
+
+    solid = result["solid"]
+    sections = result.get("sections", build_planform_sections(config))
+
+    metrics = PipelineMetrics()
+    metrics.section_count = len(sections)
+    metrics.face_count = len(solid.Faces())
+    metrics.edge_count = len(solid.Edges())
+
+    # If watertight/volume/reference were rebuilt, include them
+    if "watertight" in result:
+        metrics.watertight = result["watertight"]
+    if "volume" in result:
+        metrics.volume_mm3 = result["volume"].get("volume") if isinstance(result["volume"], dict) else result["volume"]
+        metrics.volume_dev_pct = result["volume"].get("dev_pct") if isinstance(result["volume"], dict) else None
+
+    return BuildResult(
+        solid=solid,
+        sections=sections,
+        metrics=metrics,
+        reference=result.get("reference"),
+        status="incremental",
+    )
+
+
+def build(config: Config, mode: str = "full", **kwargs: Any) -> BuildResult:
     """Unified build entry point.
 
     Args:
         config: validated wing configuration.
-        mode: "fast" for preview (no watertight/volume), "full" for commit.
+        mode: "fast" for preview, "full" for commit, "incremental" for station update.
+        **kwargs: if mode is "incremental", station_index and parameters to change.
 
     Returns:
         BuildResult with solid, sections, metrics, and optional reference.
     """
     if mode == "fast":
         return build_fast(config)
+    if mode == "incremental":
+        station_index = kwargs.pop("station_index", 0)
+        return build_incremental(config, station_index, **kwargs)
     return build_full(config)
