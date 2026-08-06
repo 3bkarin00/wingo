@@ -2,6 +2,10 @@
 the P1 subsystem. NACA codes are generated; `uiuc:<name>` is ingested from the
 vendored snapshot. All results share the same odd resample count so sections
 can be blended and lofted with aligned point correspondence (r0_findings/p02.md).
+
+Caching: the `resolve_airfoil` function is decorated with the geometry cache
+so that repeated lookups (same name + resolution) return cached ndarray objects
+without re-parsing or re-generating.
 """
 from __future__ import annotations
 
@@ -12,11 +16,13 @@ import numpy as np
 from backend.airfoils.naca import generate_naca
 from backend.airfoils.uiuc_ingest import ingest_dat_file
 from backend.airfoils.types import Airfoil
+from backend.geometry.cache import cache
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _SNAPSHOT = _REPO_ROOT / "data" / "uiuc_snapshot"
 
 
+@cache.memoize(category="airfoil", maxsize=128)
 def resolve_airfoil(
     name: str,
     resample_points: int,
@@ -27,6 +33,8 @@ def resolve_airfoil(
     `uiuc:<file>` → ingest data/uiuc_snapshot/<file>.dat; otherwise treat as a
     NACA 4/5-digit code. Raises ValueError if the airfoil can't be resolved
     (a quarantined UIUC file is an error here — placement needs real geometry).
+
+    Cached by (name, resample_points, te_thickness_frac).
     """
     key = name.strip().lower()
     if key.startswith("uiuc:"):
