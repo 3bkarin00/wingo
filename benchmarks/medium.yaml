@@ -1,0 +1,47 @@
+# Benchmark: medium — 40 stations, 3 segments with sweep/dihedral, twist transition,
+# one TE surface device. Exercises sweep accumulation, twist, and device rib forced planes.
+planform:
+  span_mm: 2400
+  segments:
+    - {name: root_mid, y_end_frac: 0.40, dihedral_deg: 3.0, sweep_le_deg: 0.0}
+    - {name: mid_tip, y_end_frac: 0.80, dihedral_deg: 6.0, sweep_le_deg: 5.0}
+    - {name: tip, y_end_frac: 1.00, dihedral_deg: 6.0, sweep_le_deg: 5.0}
+  stations:
+    - {y_frac: 0.00, chord_mm: 320, twist_deg: 2.0, airfoil: naca2412}
+    - {y_frac: 0.05, chord_mm: 315, twist_deg: 1.8, airfoil: naca2412}
+    - {y_frac: 0.10, chord_mm: 310, twist_deg: 1.6, airfoil: naca2412}
+    - {y_frac: 0.15, chord_mm: 305, twist_deg: 1.4, airfoil: naca2412}
+    - {y_frac: 0.20, chord_mm: 300, twist_deg: 1.2, airfoil: naca2412}
+    - {y_frac: 0.25, chord_mm: 295, twist_deg: 1.0, airfoil: naca2412}
+    - {y_frac: 0.30, chord_mm: 290, twist_deg: 0.8, airfoil: naca2412}
+    - {y_frac: 0.35, chord_mm: 285, twist_deg: 0.6, airfoil: naca2412}
+    - {y_frac: 0.40, chord_mm: 280, twist_deg: 0.4, airfoil: naca2412}
+    - {y_frac: 0.45, chord_mm: 275, twist_deg: 0.2, airfoil: naca2412}
+    - {y_frac: 0.50, chord_mm: 270, twist_deg: 0.0, airfoil: naca2412}
+    - {y_frac: 0.55, chord_mm: 265, twist_deg: -0.2, airfoil: naca2412}
+    - {y_frac: 0.60, chord_mm: 260, twist_deg: -0.4, airfoil: naca2412}
+    - {y_frac: 0.65, chord_mm: 255, twist_deg: -0.6, airfoil: naca2412}
+    - {y_frac: 0.70, chord_mm: 250, twist_deg: -0.8, airfoil: naca2412}
+    - {y_frac: 0.75, chord_mm: 245, twist_deg: -1.0, airfoil: naca2412}
+    - {y_frac: 0.80, chord_mm: 240, twist_deg: -1.2, airfoil: naca2412}
+    - {y_frac: 0.85, chord_mm: 230, twist_deg: -1.4, airfoil: naca2412}
+    - {y_frac: 0.90, chord_mm: 220, twist_deg: -1.6, airfoil: naca2412}
+    - {y_frac: 0.95, chord_mm: 210, twist_deg: -1.8, airfoil: naca2412}
+    - {y_frac: 1.00, chord_mm: 200, twist_deg: -2.0, airfoil: naca2412}
+  twist_axis_xc: 0.25
+  mirror: true
+airfoils: {sources: [naca4], resample_points: 199, te_min_thickness_mm: 0.8}
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 2}
+  core: {material: rohacell_31, thickness_mm: 2.5}
+  ramp_ratio: 3.0
+spars:
+  - {name: main, xc_root: 0.25, xc_tip: 0.25, web: {material: cfrp_200gsm_twill, plies: 3},
+     tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}}
+  - {name: rear, xc_root: 0.70, xc_tip: 0.70, web: {material: cfrp_200gsm_twill, plies: 2},
+     tongue: {cross_section: rect_hollow, engagement_mm: 100, clearance_mm: 0.2, wall_mm: 2.0}}
+ribs: {count: 10, construction: {material: cfrp_200gsm_twill, plies: 2}, lightening_holes: {enabled: true, margin_mm: 8}}
+te_surface: {enabled: true, span_start_frac: 0.60, span_end_frac: 0.80,
+             hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
+             max_deflection_deg: 25, hinges: {mode: generated, count: 3}}
+output: {formats: [step, stl, gltf]}

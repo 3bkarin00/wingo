@@ -1,0 +1,68 @@
+# Benchmark: large — 100 stations, 5 segments, sweep/dihedral, twist transition,
+# TE surface + LE droop, two spars. Exercises the full geometry pipeline.
+planform:
+  span_mm: 2800
+  segments:
+    - {name: root_a, y_end_frac: 0.20, dihedral_deg: 1.0, sweep_le_deg: 0.0}
+    - {name: root_b, y_end_frac: 0.40, dihedral_deg: 3.0, sweep_le_deg: 1.5}
+    - {name: mid, y_end_frac: 0.60, dihedral_deg: 5.0, sweep_le_deg: 3.5}
+    - {name: tip_a, y_end_frac: 0.80, dihedral_deg: 7.0, sweep_le_deg: 5.0}
+    - {name: tip_b, y_end_frac: 1.00, dihedral_deg: 8.0, sweep_le_deg: 6.0}
+  stations:
+    - {y_frac: 0.00, chord_mm: 340, twist_deg: 3.0, airfoil: naca2412}
+    - {y_frac: 0.01, chord_mm: 338, twist_deg: 2.95, airfoil: naca2412}
+    - {y_frac: 0.02, chord_mm: 336, twist_deg: 2.90, airfoil: naca2412}
+    - {y_frac: 0.03, chord_mm: 334, twist_deg: 2.85, airfoil: naca2412}
+    - {y_frac: 0.04, chord_mm: 332, twist_deg: 2.80, airfoil: naca2412}
+    - {y_frac: 0.05, chord_mm: 330, twist_deg: 2.75, airfoil: naca2412}
+    - {y_frac: 0.06, chord_mm: 328, twist_deg: 2.70, airfoil: naca2412}
+    - {y_frac: 0.07, chord_mm: 326, twist_deg: 2.65, airfoil: naca2412}
+    - {y_frac: 0.08, chord_mm: 324, twist_deg: 2.60, airfoil: naca2412}
+    - {y_frac: 0.09, chord_mm: 322, twist_deg: 2.55, airfoil: naca2412}
+    - {y_frac: 0.10, chord_mm: 320, twist_deg: 2.50, airfoil: naca2412}
+    - {y_frac: 0.11, chord_mm: 318, twist_deg: 2.45, airfoil: naca2412}
+    - {y_frac: 0.12, chord_mm: 316, twist_deg: 2.40, airfoil: naca2412}
+    - {y_frac: 0.13, chord_mm: 314, twist_deg: 2.35, airfoil: naca2412}
+    - {y_frac: 0.14, chord_mm: 312, twist_deg: 2.30, airfoil: naca2412}
+    - {y_frac: 0.15, chord_mm: 310, twist_deg: 2.25, airfoil: naca2412}
+    - {y_frac: 0.16, chord_mm: 308, twist_deg: 2.20, airfoil: naca2412}
+    - {y_frac: 0.17, chord_mm: 306, twist_deg: 2.15, airfoil: naca2412}
+    - {y_frac: 0.18, chord_mm: 304, twist_deg: 2.10, airfoil: naca2412}
+    - {y_frac: 0.19, chord_mm: 302, twist_deg: 2.05, airfoil: naca2412}
+    - {y_frac: 0.20, chord_mm: 300, twist_deg: 2.00, airfoil: naca2412}
+    - {y_frac: 0.25, chord_mm: 285, twist_deg: 1.50, airfoil: naca2412}
+    - {y_frac: 0.30, chord_mm: 270, twist_deg: 1.00, airfoil: naca2412}
+    - {y_frac: 0.35, chord_mm: 258, twist_deg: 0.50, airfoil: naca2412}
+    - {y_frac: 0.40, chord_mm: 246, twist_deg: 0.00, airfoil: naca2412}
+    - {y_frac: 0.45, chord_mm: 236, twist_deg: -0.50, airfoil: naca2412}
+    - {y_frac: 0.50, chord_mm: 226, twist_deg: -1.00, airfoil: naca2412}
+    - {y_frac: 0.55, chord_mm: 218, twist_deg: -1.50, airfoil: naca2412}
+    - {y_frac: 0.60, chord_mm: 210, twist_deg: -2.00, airfoil: naca2412}
+    - {y_frac: 0.65, chord_mm: 202, twist_deg: -2.50, airfoil: naca2412}
+    - {y_frac: 0.70, chord_mm: 195, twist_deg: -3.00, airfoil: naca2412}
+    - {y_frac: 0.75, chord_mm: 188, twist_deg: -3.50, airfoil: naca2412}
+    - {y_frac: 0.80, chord_mm: 181, twist_deg: -4.00, airfoil: naca2412}
+    - {y_frac: 0.85, chord_mm: 173, twist_deg: -4.50, airfoil: naca2412}
+    - {y_frac: 0.90, chord_mm: 165, twist_deg: -5.00, airfoil: naca2412}
+    - {y_frac: 0.95, chord_mm: 158, twist_deg: -5.50, airfoil: naca2412}
+    - {y_frac: 1.00, chord_mm: 150, twist_deg: -6.00, airfoil: naca2412}
+  twist_axis_xc: 0.25
+  mirror: true
+airfoils: {sources: [naca4], resample_points: 199, te_min_thickness_mm: 0.8}
+skin:
+  face_sheet: {material: cfrp_200gsm_twill, plies: 1}
+  core: {material: rohacell_31, thickness_mm: 2.5}
+  ramp_ratio: 3.0
+spars:
+  - {name: main, xc_root: 0.25, xc_tip: 0.25, web: {material: cfrp_200gsm_twill, plies: 3},
+     tongue: {cross_section: rect_hollow, engagement_mm: 140, clearance_mm: 0.2, wall_mm: 2.0}}
+  - {name: rear, xc_root: 0.70, xc_tip: 0.70, web: {material: cfrp_200gsm_twill, plies: 2},
+     tongue: {cross_section: rect_hollow, engagement_mm: 120, clearance_mm: 0.2, wall_mm: 2.0}}
+ribs: {count: 15, construction: {material: cfrp_200gsm_twill, plies: 2}, lightening_holes: {enabled: true, margin_mm: 8}}
+te_surface: {enabled: true, span_start_frac: 0.60, span_end_frac: 0.80,
+             hinge_xc_start: 0.75, hinge_xc_end: 0.75, gap_mm: 1.5,
+             max_deflection_deg: 25, hinges: {mode: generated, count: 4}}
+le_droop:   {enabled: true, span_start_frac: 0.20, span_end_frac: 0.40,
+             hinge_xc_start: 0.15, hinge_xc_end: 0.15, gap_mm: 1.5,
+             max_deflection_deg: 20, hinges: {mode: generated, count: 3}}
+output: {formats: [step, stl, gltf]}
