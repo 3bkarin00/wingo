@@ -1,10 +1,7 @@
-<!-- GENERATED from CLAUDE.md by 'make sync-agents' — do not hand-edit. -->
-
 # WingStructGen — Agent Instructions
 
 Full spec: `plan.md` (normative, read the current phase's section before touching
-code). This file is the distilled operating rules. `AGENTS.md` is generated
-from this file by `make sync-agents` — never hand-edit `AGENTS.md`.
+code). This file contains the distilled operating rules.
 
 ## Session protocol
 

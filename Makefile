@@ -9,10 +9,10 @@ ALEMBIC := $(VENV)/bin/alembic
 export DATABASE_URL ?= postgresql+psycopg://wingstructgen:wingstructgen@localhost:5432/wingstructgen
 export REDIS_URL ?= redis://localhost:6379/0
 
-.PHONY: help venv up down migrate seed probes gate regress sync-agents
+.PHONY: help venv up down migrate seed probes gate regress
 
 help:
-	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress sync-agents"
+	@echo "targets: venv up down migrate seed probes gate PHASE=pXX regress"
 
 venv:
 	python3 -m venv $(VENV)
@@ -49,11 +49,3 @@ gate:
 
 regress:
 	@$(PY) scripts/run_regress.py
-
-sync-agents:
-	@{ \
-	  echo "<!-- GENERATED from CLAUDE.md by 'make sync-agents' — do not hand-edit. -->"; \
-	  echo; \
-	  cat CLAUDE.md; \
-	} > AGENTS.md
-	@echo "AGENTS.md regenerated from CLAUDE.md"

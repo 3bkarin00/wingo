@@ -11,7 +11,7 @@ Every resolved kernel fight gets an entry here. Format:
 
 Compounds in value toward P15–P16 (molds — the hardest OCC work). Skim the
 entries relevant to a phase's libraries before starting that phase's
-implementation (session protocol, CLAUDE.md).
+implementation (session protocol, AGENTS.md).
 
 ## OCP/gmsh ImportError: libGL.so.1 / libXcursor.so.1 missing
 

@@ -61,8 +61,7 @@ P14 is a formal MANUAL gate with a signed checklist committed to the repo (§9, 
 ### 0.4 Repository layout (create in P0)
 ```
 wingstructgen/
-├── CLAUDE.md                    # distilled rules from §0 (read by Claude Code)
-├── AGENTS.md                    # same content, Antigravity convention (keep in sync — §0.5)
+├── AGENTS.md                    # agent instructions (read by coding agents)
 ├── plan.md                      # this file (normative)
 ├── handoff.md                   # next-step memory, rewritten every session (§0.5)
 ├── changelog.md                 # decision journal (§0.5)
@@ -101,11 +100,9 @@ nothing) and **decision amnesia** (why is it built this way?). The agent MUST
 maintain these; a session that ends without updating handoff.md + state.json is
 an incomplete session.
 
-**CLAUDE.md / AGENTS.md** — the agent instruction file. CLAUDE.md is read by
-Claude Code; AGENTS.md is the Antigravity convention. Identical content
-(generate one from the other in the Makefile — never hand-edit both). Contents:
-distilled §0 rules, the anti-pattern list, pointers to conventions.md,
-tolerances.py, handoff.md, and the session protocol below.
+**AGENTS.md** — the agent instruction file. Contents: distilled §0 rules, the
+anti-pattern list, pointers to conventions.md, tolerances.py, handoff.md, and
+the session protocol below.
 
 **handoff.md** — next-step memory. HARD CAP ~20 lines. REWRITTEN (never
 appended) at the end of every session. Template:
@@ -156,7 +153,7 @@ found. Compounds in value toward P15–P16 (molds, the hardest OCC work).
 post-kickoff pivot (ADR-001 = the v0.4 joint redesign). The §2 D-table stays
 the baseline; ADRs capture deltas so plan.md isn't rewritten per pivot.
 
-**Session protocol (append to CLAUDE.md/AGENTS.md):**
+**Session protocol (append to AGENTS.md):**
 ```
 START: read state.json → handoff.md → current phase section in plan.md →
        docs/known_issues.md (skim for the libs this phase touches).
