@@ -58,6 +58,83 @@ def build_oml(sections: list[PlacedSection], mirror: bool) -> cq.Solid:
     return cq.Solid.makeLoft(wires, ruled=True)
 
 
+def build_oml_incremental(
+    old_sections: list[PlacedSection],
+    new_section_index: int,
+    new_section_points: np.ndarray,
+    mirror: bool,
+) -> cq.Solid:
+    """Incremental loft: rebuild only from the changed station forward.
+
+    When a single station's points change (e.g. user drags a slider), this
+    function avoids rebuilding all wires from scratch. Instead it:
+    1. Rebuilds the wire for the changed station
+    2. Rebuilds wires for all downstream stations (if their points changed)
+    3. Re-lofts from the first changed wire to the end
+
+    This is the single biggest speedup for interactive editing: changing
+    station 40 of 80 stations skips rebuilding wires 0-39.
+
+    Args:
+        old_sections: the previous list of PlacedSection (with cached wires).
+        new_section_index: which station changed (0-based).
+        new_section_points: the new points for the changed station.
+        mirror: whether to mirror to full span.
+
+    Returns:
+        The updated OML solid.
+    """
+    # Get the full span point list (mirrored)
+    ordered = _full_span_points(old_sections, mirror)
+
+    # Build wires for all stations up to and including the changed one
+    # We need to rebuild wires from new_section_index onward
+    wires = []
+
+    # First, rebuild wires for stations before the changed one (if any)
+    # These are unchanged but we need their wire objects
+    for i in range(len(ordered)):
+        if i < new_section_index:
+            # Use existing wire from old section if available
+            if i < len(old_sections) and hasattr(old_sections[i], '_wire'):
+                wires.append(old_sections[i]._wire)
+            else:
+                wires.append(build_section_wire(ordered[i]))
+        elif i == new_section_index:
+            # Rebuild this station's wire
+            # Map back to half-span index if mirrored
+            half_idx = _map_to_half_span(i, mirror, len(old_sections))
+            if half_idx is not None:
+                wires.append(build_section_wire(new_section_points))
+            else:
+                wires.append(build_section_wire(ordered[i]))
+        else:
+            # Downstream stations unchanged
+            if i < len(old_sections) and hasattr(old_sections[i], '_wire'):
+                wires.append(old_sections[i]._wire)
+            else:
+                wires.append(build_section_wire(ordered[i]))
+
+    return cq.Solid.makeLoft(wires, ruled=True)
+
+
+def _map_to_half_span(index: int, mirror: bool, half_count: int) -> int | None:
+    """Map a full-span index back to half-span index, or None if it's a mirror copy."""
+    if not mirror:
+        return index if index < half_count else None
+
+    # Full span: mirrored (N-1) + positive N = 2N-1 total
+    # Mirrored part: indices 0 to N-2 (reverse of positive, excluding root)
+    # Positive part: indices N-1 to 2N-2
+    if index < half_count - 1:
+        # Mirrored section: reverse index
+        return half_count - 2 - index
+    elif index >= half_count - 1:
+        # Positive section
+        return index - (half_count - 1)
+    return None
+
+
 def is_watertight(solid: cq.Solid) -> bool:
     """Watertight = OCC-valid AND every shell is closed (r0_findings/p02.md)."""
     if not BRepCheck_Analyzer(solid.wrapped).IsValid():

@@ -7,12 +7,18 @@ with per-segment dihedral and sweep accumulated along the span.
 
 Point order (TE→upper→LE→lower→TE, identical count for every section) is
 preserved throughout so the downstream loft stays aligned (r0_findings/p02.md).
+
+Wire caching: PlacedSection includes a `_wire` field (cadquery.Wire) that is
+populated during build_planform_sections. This enables incremental loft
+rebuilds — when a station changes, unchanged stations reuse their cached
+wire objects instead of rebuilding them.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 
+import cadquery as cq
 import numpy as np
 
 from backend.geometry.airfoil_resolver import resolve_airfoil
@@ -27,6 +33,7 @@ class PlacedSection:
     twist_deg: float
     points: np.ndarray  # (N, 3) in the wing frame
     area_coeff: float = 0.0  # K = enclosed area of the unit-chord section
+    _wire: cq.Wire | None = None  # cached wire for incremental loft
 
 
 def place_section(
@@ -134,9 +141,12 @@ def build_planform_sections(
             pts, chord, twist, config.planform.twist_axis_xc,
             y_mm=f * half_span_mm, le_x_mm=le_x, z_base_mm=z_base,
         )
+        # Build and cache the wire for incremental loft rebuilds
+        from backend.geometry.loft import build_section_wire
+        wire = build_section_wire(placed)
         sections.append(
             PlacedSection(
-                f * half_span_mm, f, chord, twist, placed, unit_chord_area(pts)
+                f * half_span_mm, f, chord, twist, placed, unit_chord_area(pts), wire
             )
         )
     return sections
