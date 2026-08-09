@@ -16,9 +16,13 @@
 - P06: Dependency graph core (backend/core/dependency.py + backend/core/node.py) —
   DAG with BFS invalidation, Kahn's topological order, cycle detection,
   GeometryNode with CLEAN/DIRTY/BUILDING/ERROR states
-- P07: Multi-resolution geometry (backend/geometry/multires.py) — low (51-pt),
-  medium (127-pt), high (199-pt) airfoil presets; build_at_quality() with
-  resample_override; build_preview() / build_export() convenience functions
+- P07 (hinges): Hinge geometry (backend/geometry/hinges.py) — hinge holes
+  (cylindrical cutouts) coaxial with hinge axis, lug/tang features with
+  configurable fit gap; coaxiality by construction (0 mm deviation);
+  build_hinge_geometry() for TE/LE devices
+- P07 (multires): Multi-resolution geometry (backend/geometry/multires.py) —
+  low (51-pt), medium (127-pt), high (199-pt) airfoil presets;
+  build_at_quality() with resample_override; build_preview() / build_export()
 - P08: Memory profiling module (backend/geometry/memory.py)
 - P09: FastAPI app (backend/api/app.py) — job CRUD, config/material/airfoil
   persistence, WebSocket progress, artifact serving; worker skeleton
