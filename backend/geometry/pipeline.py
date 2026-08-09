@@ -48,7 +48,12 @@ def _get_wing_graph() -> Any:
 
 @dataclass
 class PipelineMetrics:
-    """Timing and status metrics for a pipeline run."""
+    """Timing and status metrics for a pipeline run.
+
+    Supports dict-like access for backward compatibility:
+        metrics["total_ms"]  ->  metrics.to_dict()["total_ms"]
+        metrics.get("volume_mm3")  ->  metrics.to_dict().get("volume_mm3")
+    """
     airfoil_loading_ms: float = 0.0
     section_placement_ms: float = 0.0
     loft_ms: float = 0.0
@@ -57,6 +62,7 @@ class PipelineMetrics:
     reference_ms: float = 0.0
     watertight: bool | None = None  # None if not checked
     volume_mm3: float | None = None
+    volume_estimate_mm3: float | None = None  # analytic estimate for deviation calc
     volume_dev_pct: float | None = None
     face_count: int | None = None
     edge_count: int | None = None
@@ -74,21 +80,31 @@ class PipelineMetrics:
         return self._total_ms
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "airfoil_loading_ms": round(self.airfoil_loading_ms, 1),
-            "section_placement_ms": round(self.section_placement_ms, 1),
-            "loft_ms": round(self.loft_ms, 1),
-            "watertight_ms": round(self.watertight_ms, 1),
-            "volume_ms": round(self.volume_ms, 1),
-            "reference_ms": round(self.reference_ms, 1),
-            "total_ms": round(self.total_ms, 1),
-            "watertight": self.watertight,
-            "volume_mm3": self.volume_mm3,
-            "volume_dev_pct": self.volume_dev_pct,
-            "face_count": self.face_count,
-            "edge_count": self.edge_count,
-            "section_count": self.section_count,
-        }
+        # Only include non-zero timing fields — fast path omits skipped stages
+        result: dict[str, Any] = {}
+        for key in ("airfoil_loading_ms", "section_placement_ms", "loft_ms",
+                    "watertight_ms", "volume_ms", "reference_ms"):
+            val = getattr(self, key)
+            if val != 0.0:
+                result[key] = round(val, 1)
+        result["total_ms"] = round(self.total_ms, 1)
+        result["watertight"] = self.watertight
+        result["volume_mm3"] = self.volume_mm3
+        result["volume_estimate_mm3"] = self.volume_estimate_mm3
+        result["volume_dev_pct"] = self.volume_dev_pct
+        result["face_count"] = self.face_count
+        result["edge_count"] = self.edge_count
+        result["section_count"] = self.section_count
+        return result
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.to_dict().get(key, default)
 
 
 @dataclass
@@ -97,6 +113,10 @@ class BuildResult:
     solid: cq.Solid
     sections: list  # PlacedSection objects
     metrics: PipelineMetrics
+    watertight: bool | None = None  # None if not checked (fast path)
+    volume: float | None = None  # alias for volume_mm3 (test contract)
+    face_count: int | None = None
+    edge_count: int | None = None
     reference: Any = None  # ReferenceGeometry (full path only)
     status: str = "preview"  # "preview" or "final"
 
@@ -140,6 +160,10 @@ def build_fast(config: Config) -> BuildResult:
         solid=solid,
         sections=sections,
         metrics=metrics,
+        watertight=None,
+        volume=None,
+        face_count=metrics.face_count,
+        edge_count=metrics.edge_count,
         status="preview",
     )
 
@@ -176,6 +200,7 @@ def build_full(config: Config) -> BuildResult:
     estimate = analytic_volume_estimate(sections, config.planform.mirror)
     vol_dev = abs(vol - estimate) / estimate * 100
     metrics.volume_mm3 = vol
+    metrics.volume_estimate_mm3 = estimate
     metrics.volume_dev_pct = vol_dev
     metrics.volume_ms = _now_ms() - t0
 
@@ -192,6 +217,10 @@ def build_full(config: Config) -> BuildResult:
         solid=solid,
         sections=sections,
         metrics=metrics,
+        watertight=metrics.watertight,
+        volume=metrics.volume_mm3,
+        face_count=metrics.face_count,
+        edge_count=metrics.edge_count,
         reference=ref,
         status="final",
     )
