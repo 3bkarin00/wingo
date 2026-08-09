@@ -74,7 +74,7 @@ class GeometryNode:
 
         self.state = NodeState.BUILDING
         try:
-            self.output = self.build_fn(self)
+            self.output = self.build_fn()
             self.state = NodeState.CLEAN
             self.error = None
             return self.output

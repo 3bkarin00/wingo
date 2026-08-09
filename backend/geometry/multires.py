@@ -48,6 +48,8 @@ class MultiResResult:
     metrics: dict
     watertight: bool | None = None
     volume: float | None = None
+    face_count: int | None = None
+    edge_count: int | None = None
 
 
 def build_at_quality(

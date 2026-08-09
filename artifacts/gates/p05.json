@@ -1,0 +1,21 @@
+{
+  "phase": "p05",
+  "pass": true,
+  "metrics": {
+    "p05": {
+      "incremental_function": "build_incremental",
+      "dependency_graph_class": "WingDependencyGraph",
+      "graph_nodes": [
+        "config_hash",
+        "airfoil_*",
+        "station_*",
+        "loft",
+        "watertight",
+        "volume",
+        "reference"
+      ],
+      "description": "Incremental loft \u2014 rebuild only changed station + downstream nodes"
+    }
+  },
+  "timestamp": "2026-08-09T11:11:55.969842+00:00"
+}

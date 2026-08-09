@@ -1,0 +1,29 @@
+{
+  "phase": "p06",
+  "pass": true,
+  "metrics": {
+    "p06": {
+      "graph_class": "DependencyGraph",
+      "node_class": "GeometryNode",
+      "node_state_enum": [
+        "CLEAN",
+        "DIRTY",
+        "BUILDING",
+        "ERROR"
+      ],
+      "features": [
+        "add_node",
+        "add_edge",
+        "remove_node",
+        "invalidate",
+        "get_dirty_nodes",
+        "topological_order",
+        "rebuild_all",
+        "stats"
+      ],
+      "cycle_detection": true,
+      "description": "Dependency graph \u2014 DAG wiring, topological order, cycle detection"
+    }
+  },
+  "timestamp": "2026-08-09T11:19:24.633678+00:00"
+}

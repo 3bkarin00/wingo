@@ -1,0 +1,30 @@
+{
+  "phase": "p07",
+  "pass": true,
+  "metrics": {
+    "p07": {
+      "quality_presets": {
+        "low": {
+          "airfoil_points": 51,
+          "tessellation_tolerance_mm": 0.5
+        },
+        "medium": {
+          "airfoil_points": 127,
+          "tessellation_tolerance_mm": 0.1
+        },
+        "high": {
+          "airfoil_points": 199,
+          "tessellation_tolerance_mm": 0.05
+        }
+      },
+      "functions": [
+        "build_at_quality",
+        "build_preview",
+        "build_export"
+      ],
+      "result_class": "MultiResResult",
+      "description": "Multi-resolution geometry \u2014 low/medium/high quality levels for preview vs export"
+    }
+  },
+  "timestamp": "2026-08-09T11:35:39.432642+00:00"
+}

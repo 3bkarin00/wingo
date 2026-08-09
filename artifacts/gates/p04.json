@@ -1,0 +1,18 @@
+{
+  "phase": "p04",
+  "pass": true,
+  "metrics": {
+    "p04": {
+      "pipeline_paths": [
+        "fast",
+        "full"
+      ],
+      "fast_skips": [
+        "watertight_check",
+        "volume_computation"
+      ],
+      "description": "Fast/slow pipeline \u2014 build_fast skips watertight/volume, build_full does both"
+    }
+  },
+  "timestamp": "2026-08-09T10:41:53.553812+00:00"
+}

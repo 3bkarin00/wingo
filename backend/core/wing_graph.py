@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from functools import partial
 from typing import Any
 
 import cadquery as cq
@@ -75,7 +76,10 @@ class WingDependencyGraph:
     def _build_nodes(self) -> None:
         """Build all geometry nodes and wire up dependencies."""
         # Root: config hash
-        config_node = GeometryNode(id="config_hash", build_fn=lambda self: self._config_hash)
+        config_node = GeometryNode(
+            id="config_hash",
+            build_fn=partial(WingDependencyGraph._get_config_hash, self),
+        )
         self.graph.add_node(config_node)
 
         # Airfoil nodes: one per unique airfoil name in stations
@@ -84,7 +88,7 @@ class WingDependencyGraph:
             af_id = f"airfoil_{airfoil_name}"
             af_node = GeometryNode(
                 id=af_id,
-                build_fn=lambda self, name=airfoil_name: self._build_airfoil(name),
+                build_fn=partial(WingDependencyGraph._build_airfoil_for_node, self, airfoil_name),
             )
             af_node.add_input("resample_points", self.config.airfoils.resample_points)
             af_node.add_input("te_thickness_frac", self.config.airfoils.te_min_thickness_mm)
@@ -96,54 +100,85 @@ class WingDependencyGraph:
             station_id = f"station_{i}"
             station_node = GeometryNode(
                 id=station_id,
-                build_fn=lambda self, idx=i: self._build_station(idx),
+                build_fn=partial(WingDependencyGraph._build_station_for_node, self, i),
             )
-            # Each station depends on its airfoil
+            # Each station depends on its airfoil (graph edge)
             af_id = f"airfoil_{station.airfoil}"
-            station_node.add_dependency(af_id)
-            # Also depends on config params
+            self.graph.add_edge(af_id, station_id)
+            # Also depends on config params (stored as inputs on the node)
             station_node.add_input("y_frac", station.y_frac)
             station_node.add_input("chord_mm", station.chord_mm)
             station_node.add_input("twist_deg", station.twist_deg)
             station_node.add_input("mirror", self.config.planform.mirror)
             self.graph.add_node(station_node)
-            self.graph.add_edge(af_id, station_id)
 
         # Loft node: depends on all stations
         loft_node = GeometryNode(
             id="loft",
-            build_fn=lambda self: self._build_loft(),
+            build_fn=partial(WingDependencyGraph._build_loft_for_node, self),
         )
         for i in range(len(self.config.planform.stations)):
-            loft_node.add_dependency(f"station_{i}")
+            self.graph.add_edge(f"station_{i}", "loft")
         self.graph.add_node(loft_node)
         self.graph.add_edge("config_hash", "loft")
 
         # Watertight node: depends on loft
         watertight_node = GeometryNode(
             id="watertight",
-            build_fn=lambda self: self._build_watertight(),
+            build_fn=partial(WingDependencyGraph._build_watertight_for_node, self),
         )
-        watertight_node.add_dependency("loft")
+        self.graph.add_edge("loft", "watertight")
         self.graph.add_node(watertight_node)
 
         # Volume node: depends on loft
         volume_node = GeometryNode(
             id="volume",
-            build_fn=lambda self: self._build_volume(),
+            build_fn=partial(WingDependencyGraph._build_volume_for_node, self),
         )
-        volume_node.add_dependency("loft")
+        self.graph.add_edge("loft", "volume")
         self.graph.add_node(volume_node)
 
         # Reference node: depends on config and stations
         ref_node = GeometryNode(
             id="reference",
-            build_fn=lambda self: self._build_reference(),
+            build_fn=partial(WingDependencyGraph._build_reference_for_node, self),
         )
-        ref_node.add_dependency("config_hash")
+        self.graph.add_edge("config_hash", "reference")
         for i in range(len(self.config.planform.stations)):
-            ref_node.add_dependency(f"station_{i}")
+            self.graph.add_edge(f"station_{i}", "reference")
         self.graph.add_node(ref_node)
+
+    # ── Wrapper functions for GeometryNode build_fn (called via partial) ──
+    # GeometryNode.build() calls self.build_fn() with no args.
+    # partial pre-binds (graph, ...) so the wrapper just needs those params.
+
+    @staticmethod
+    def _get_config_hash(graph: "WingDependencyGraph") -> str:
+        return graph._config_hash
+
+    @staticmethod
+    def _build_airfoil_for_node(graph: "WingDependencyGraph", name: str) -> np.ndarray:
+        return graph._build_airfoil(name)
+
+    @staticmethod
+    def _build_station_for_node(graph: "WingDependencyGraph", index: int) -> PlacedSection:
+        return graph._build_station(index)
+
+    @staticmethod
+    def _build_loft_for_node(graph: "WingDependencyGraph") -> cq.Solid:
+        return graph._build_loft()
+
+    @staticmethod
+    def _build_watertight_for_node(graph: "WingDependencyGraph") -> bool:
+        return graph._build_watertight()
+
+    @staticmethod
+    def _build_volume_for_node(graph: "WingDependencyGraph") -> dict[str, float]:
+        return graph._build_volume()
+
+    @staticmethod
+    def _build_reference_for_node(graph: "WingDependencyGraph") -> Any:
+        return graph._build_reference()
 
     def _build_airfoil(self, name: str) -> np.ndarray:
         """Build a resolved airfoil from cache or compute."""
@@ -260,6 +295,9 @@ class WingDependencyGraph:
     def update_station(self, station_index: int, **kwargs: Any) -> dict[str, Any]:
         """Update a single station parameter and rebuild only affected nodes.
 
+        First builds all nodes to establish baseline output, then invalidates
+        the changed station and rebuilds only that station + downstream.
+
         Args:
             station_index: which station to update.
             **kwargs: parameters to change (chord_mm, twist_deg, y_frac, etc.)
@@ -274,6 +312,11 @@ class WingDependencyGraph:
         station = self.config.planform.stations[station_index]
         for key, value in kwargs.items():
             setattr(station, key, value)
+
+        # Build all nodes first (establish baseline)
+        for node in self.graph.nodes.values():
+            if node.needs_rebuild():
+                node.build()
 
         # Invalidate this station and downstream
         dirty = self.graph.invalidate(station_id)
