@@ -1,8 +1,8 @@
 # Handoff — 2026-08-09
 ## State
-- Release/Phase: R1 / P04-P07 DONE, P09-P10 DONE (main branch)
-- Gates passed: p00, p01, p02, p03, p04, p05, p06, p07, p09, p10 (10/10)
-- Regression: all 126 tests pass (10 gates)
+- Release/Phase: R1 / P04-P08 DONE, P09-P10 DONE (main branch)
+- Gates passed: p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10 (11/11)
+- Regression: all 126+ tests pass (11 gates)
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
@@ -23,7 +23,11 @@
 - P07 (multires): Multi-resolution geometry (backend/geometry/multires.py) —
   low (51-pt), medium (127-pt), high (199-pt) airfoil presets;
   build_at_quality() with resample_override; build_preview() / build_export()
-- P08: Memory profiling module (backend/geometry/memory.py)
+- P08 (kinematic): Kinematic sweep gate (backend/geometry/kinematic.py) —
+  sweep TE/LE through ±max_deflection with coarse 1° + fine 0.1° steps;
+  collision detection via BRepExtrema_ShapeProximity; swept-volume boolean;
+  monotonic trend check; check_kinematics() validates all pass criteria
+- P08 (memory): Memory profiling module (backend/geometry/memory.py)
 - P09: FastAPI app (backend/api/app.py) — job CRUD, config/material/airfoil
   persistence, WebSocket progress, artifact serving; worker skeleton
 - P10: Mesh simplification/LOD (backend/geometry/mesh.py) — tessellation stats,
