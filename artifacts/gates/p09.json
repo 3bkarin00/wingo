@@ -1,0 +1,19 @@
+{
+  "phase": "p09",
+  "pass": true,
+  "metrics": {
+    "p09": {
+      "routes_registered": 14,
+      "api_endpoints": 14,
+      "worker_modules": [
+        "jobs",
+        "sandbox",
+        "reaper",
+        "heartbeat"
+      ],
+      "db_models": 6,
+      "description": "FastAPI app with job CRUD, config/material/airfoil persistence, WebSocket progress, artifact serving"
+    }
+  },
+  "timestamp": "2026-08-09T09:06:09.683573+00:00"
+}
