@@ -482,4 +482,38 @@ async def serve_artifact(job_id: uuid.UUID, name: str) -> None:
     )
 
 
+# ── Report serving (P19) ──────────────────────────────────────────────────
+
+
+@router.get("/reports/{job_id}")
+async def serve_report(job_id: uuid.UUID) -> None:
+    """Generate and serve a bilingual (EN/AR) PDF report for a job.
+
+    Reads gate_results rows from Postgres, compiles via lualatex Docker,
+    returns the PDF.
+    """
+    from fastapi.responses import Response
+
+    try:
+        with session_scope() as db_session:
+            pdf_bytes = _generate_report(job_id, db_session)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    except Exception as exc:
+        logger.exception("Report generation failed for job %s", job_id)
+        raise HTTPException(500, f"Report generation failed: {exc}")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=report-{job_id}.pdf"},
+    )
+
+
+def _generate_report(job_id: uuid.UUID, db_session: Session) -> bytes:
+    """Generate PDF report bytes (shared by API and gate tests)."""
+    from backend.report.bilingual import generate_report as _gen
+    return _gen(job_id, db_session)
+
+
 app.include_router(router)

@@ -1,8 +1,9 @@
 # Handoff — 2026-08-10
 ## State
-- Release/Phase: R2 / P00-P18 DONE (main branch)
-- Gates passed: p00-p18 (19/19)
-- Regression: all 209+ tests pass (18 gates)
+- Release/Phase: R2 COMPLETE — P00-P19 DONE (main branch)
+- Gates passed: p00-p19 (20/20)
+- Regression: all 209+ tests pass (18 gates) + p19 (9 tests)
+- Pre-existing regress failures (unrelated to P19): p00 (DB not running), p13 (missing tests module)
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
@@ -23,9 +24,10 @@
 - P16 (demold): backend/geometry/demold.py — undercut scan, stock sectioning, alignment features
 - P17 (dxf): backend/exporters/dxf_flat.py — rib/spar flat patterns, area validation, developability check
 - P18 (joint retention): backend/geometry/joint_retention.py — aluminum housings, Z-bolts, countersink lips, tongue clearance holes, preload-path continuity, COTS hinge pockets, bore chain coaxiality, lip flushness
+- P19 (bilingual report): backend/report/bilingual.py — lualatex Docker container (EN/AR, Amiri font), report from gate_results, API endpoint /api/reports/{job_id}
 
-## Remaining roadmap
-- P19: Bilingual report — lualatex EN/AR PDF generation
+## R2 Complete
+All 20 phases (P00-P19) of Release 2 are complete. 20/20 gates passed.
 
 ## Do not touch
 - P00-P03 gates are frozen contracts

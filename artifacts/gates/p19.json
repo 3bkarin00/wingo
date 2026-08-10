@@ -1,0 +1,23 @@
+{
+  "phase": "p19",
+  "pass": true,
+  "metrics": {
+    "p19": {
+      "report": "Bilingual EN/AR PDF report from gate_results",
+      "checks": [
+        "report compiles from a real job's gate_results rows with zero lualatex errors",
+        "every gate in the job appears in the PDF (count match)",
+        "AR pages render RTL (marker-position check on rasterized page)",
+        "PDF served via API endpoint"
+      ],
+      "functions": [
+        "generate_report",
+        "_compile_latex",
+        "_escape_latex",
+        "build_gate_report_entries"
+      ],
+      "description": "Bilingual report \u2014 lualatex EN/AR PDF from gate_results"
+    }
+  },
+  "timestamp": "2026-08-10T13:20:39.744984+00:00"
+}

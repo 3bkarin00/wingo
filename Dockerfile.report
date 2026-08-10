@@ -1,0 +1,19 @@
+# lualatex + Amiri font for bilingual report generation (P19)
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-base \
+    texlive-binaries \
+    texlive-latex-base \
+    texlive-latex-extra \
+    texlive-luatex \
+    fonts-hosny-amiri \
+    texlive-lang-arabic \
+    texlive-fonts-recommended \
+    && rm -rf /var/lib/apt/lists/*
+
+# Generate lualatex format (needed after texlive-latex-base install)
+RUN fmtutil-sys --all 2>/dev/null || true
+
+# Amiri font should now be available via kpsewhich
+WORKDIR /src
