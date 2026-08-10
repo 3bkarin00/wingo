@@ -85,3 +85,14 @@ RESAMPLE_ROUNDTRIP_MAX_DEV_FRAC = 1.0e-3
 # is 1.8e-4 (see tests/golden/expected/naca_reference.json); threshold set at
 # 5e-4 → ~2.7x margin, tight enough to catch a real generator regression.
 NACA_PUBLISHED_MATCH_MAX_DEV_FRAC = 5.0e-4
+
+# --- P2 / P20 geometry gates ------------------------------------------------
+
+# P2 gate: loft volume vs analytic estimate deviation limit (plan.md §9 P2: ±3%).
+# Used by P2 gate and P20 shape validation volume check.
+LOFT_VS_ESTIMATE_FRAC = 0.03
+
+# P20 shape validation: min thickness/chord ratio for reasonable airfoil shape.
+# Typical aircraft wings: 5-15%, up to 20% for very thick sections.
+THICKNESS_RATIO_MIN = 0.03
+THICKNESS_RATIO_MAX = 0.20
