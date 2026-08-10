@@ -1,8 +1,8 @@
 # Handoff — 2026-08-10
 ## State
-- Release/Phase: R2 / P00-P13 DONE (main branch)
-- Gates passed: p00-p13 (14/14)
-- Regression: all 158+ tests pass (14 gates)
+- Release/Phase: R2 / P00-P18 DONE (main branch)
+- Gates passed: p00-p18 (19/19)
+- Regression: all 209+ tests pass (18 gates)
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
@@ -18,12 +18,13 @@
 - P11 (segmentation): 3-piece wing (backend/geometry/segmentation.py) — tongue/box joints, insertion sweep
 - P12 (midsurface STEP): Midsurface construction (backend/geometry/midsurface.py) — face extraction, sliver scan, STEP export/import
 - P13 (.cdb writer + layup): backend/exporters/cdb_writer.py + layup.py — APDL NBLOCK/EBLOCK/ET/SECTYPE/SECDATA/CMBLOCK writer, independent oracle parser (tests/oracle/cdb_parser.py), CSV+JSON layup schedule
+- P14: Manual Ansys acceptance checklist (docs/ansys_acceptance_checklist.md)
+- P15 (molds): backend/geometry/molds.py — parting curves, mold halves, assembly, cavity closure, pin coaxiality
+- P16 (demold): backend/geometry/demold.py — undercut scan, stock sectioning, alignment features
+- P17 (dxf): backend/exporters/dxf_flat.py — rib/spar flat patterns, area validation, developability check
+- P18 (joint retention): backend/geometry/joint_retention.py — aluminum housings, Z-bolts, countersink lips, tongue clearance holes, preload-path continuity, COTS hinge pockets, bore chain coaxiality, lip flushness
 
 ## Remaining roadmap
-- P14: Manual Ansys acceptance checklist (formal gate, human-executed)
-- P15-P16: Molds (R3) — parting surfaces, cavities, flanges, pins, demold scan
-- P17: DXF flat patterns with developability check
-- P18: Joint retention hardware — aluminum housings, Z-bolts, preload path
 - P19: Bilingual report — lualatex EN/AR PDF generation
 
 ## Do not touch
