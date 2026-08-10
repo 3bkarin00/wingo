@@ -1,9 +1,9 @@
 # Handoff — 2026-08-10
 ## State
-- Release/Phase: R2 COMPLETE — P00-P19 DONE (main branch)
-- Gates passed: p00-p19 (20/20)
-- Regression: all 209+ tests pass (18 gates) + p19 (9 tests)
-- Pre-existing regress failures (unrelated to P19): p00 (DB not running), p13 (missing tests module)
+- Release/Phase: R2 COMPLETE — P00-P20 DONE (main branch)
+- Gates passed: p00-p20 (21/21)
+- Regression: all 244+ tests pass (19 gates) + p19 (9 tests) + p20 (35 tests)
+- Pre-existing regress failures (unrelated to P19/P20): p00 (DB not running), p13 (missing tests module)
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
@@ -25,9 +25,10 @@
 - P17 (dxf): backend/exporters/dxf_flat.py — rib/spar flat patterns, area validation, developability check
 - P18 (joint retention): backend/geometry/joint_retention.py — aluminum housings, Z-bolts, countersink lips, tongue clearance holes, preload-path continuity, COTS hinge pockets, bore chain coaxiality, lip flushness
 - P19 (bilingual report): backend/report/bilingual.py — lualatex Docker container (EN/AR, Amiri font), report from gate_results, API endpoint /api/reports/{job_id}
+- P20 (shape validation): backend/geometry/validate.py — bounding box, face area, symmetry, chord, volume checks (35 tests)
 
 ## R2 Complete
-All 20 phases (P00-P19) of Release 2 are complete. 20/20 gates passed.
+All 21 phases (P00-P20) of Release 2 are complete. 21/21 gates passed.
 
 ## Do not touch
 - P00-P03 gates are frozen contracts
