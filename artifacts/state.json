@@ -1,7 +1,7 @@
 {
   "schema_version": "0.4",
-  "current_release": "R1",
-  "current_phase": "p08",
+  "current_release": "R1.5",
+  "current_phase": "p13",
   "gates_passed": [
     "p00",
     "p01",
@@ -13,7 +13,9 @@
     "p05",
     "p06",
     "p07",
-    "p08"
+    "p08",
+    "p11",
+    "p12"
   ],
   "last_golden_run": null,
   "plan_md_version": "0.4"

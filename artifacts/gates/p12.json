@@ -1,0 +1,26 @@
+{
+  "phase": "p12",
+  "pass": true,
+  "metrics": {
+    "p12": {
+      "midsurfaces": "faces extracted from structural body solids",
+      "checks": [
+        "sliver/micro-edge scan: 0 edges < target_element_size_mm/10",
+        "shared-edge conformality where ribs meet skin/spars",
+        "names survive OCC re-import",
+        "midsurface-to-solid max normal deviation < 10% of local thickness"
+      ],
+      "functions": [
+        "build_midsurfaces",
+        "check_sliver_edges",
+        "check_shared_edge_conformality",
+        "check_midsurface_deviation",
+        "export_midsurface_step",
+        "import_midsurface_step",
+        "verify_names_survive"
+      ],
+      "description": "Midsurface STEP construction with sliver scan, conformality check, and name preservation"
+    }
+  },
+  "timestamp": "2026-08-10T08:29:31.471671+00:00"
+}

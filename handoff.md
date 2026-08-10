@@ -1,8 +1,8 @@
 # Handoff — 2026-08-09
 ## State
-- Release/Phase: R1 / P04-P08 DONE, P09-P10 DONE (main branch)
-- Gates passed: p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10 (11/11)
-- Regression: all 126+ tests pass (11 gates)
+- Release/Phase: R1.5 / P00-P11 DONE, P12 DONE (main branch)
+- Gates passed: p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11, p12 (13/13)
+- Regression: all 142+ tests pass (13 gates)
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
@@ -32,9 +32,16 @@
   persistence, WebSocket progress, artifact serving; worker skeleton
 - P10: Mesh simplification/LOD (backend/geometry/mesh.py) — tessellation stats,
   LOD levels, render performance estimation
+- P11 (segmentation): 3-piece wing segmentation (backend/geometry/segmentation.py) —
+  center + outer panel solids, tongue/box joints at break planes, insertion sweep
+  validation, OML deviation check < 0.1 mm, device-in-segment containment validation
+- P12 (midsurface STEP): Midsurface construction and STEP export (backend/geometry/midsurface.py) —
+  face extraction from solids, sliver/micro-edge scan, shared-edge conformality check,
+  STEP export via Compound.makeCompound + cadquery exporters, STEP import via
+  STEPControl_Reader + TopExp_Explorer, midsurface-to-solid deviation check
 
 ## Remaining roadmap (performance)
-- P11-P19: Segmentation, web UI E2E, structural analysis, CI pipeline, etc. (plan.md)
+- P13-P19: .cdb writer, Ansys gates, molds, reports, etc. (plan.md)
 
 ## Do not touch
 - P00-P03 gates are frozen contracts
