@@ -169,10 +169,3 @@ async def get_config_for_viewer(
     }
 
 
-def _get_db():
-    """Yield a scoped ORM session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

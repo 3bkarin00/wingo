@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Environment } from '@react-three/drei'
+import { OrbitControls, Grid, Environment, Html } from '@react-three/drei'
 import * as THREE from 'three'
 
 function WingMesh({ vertices, indices, color = '#4a9eff' }) {
@@ -122,15 +122,3 @@ export function WingViewer({ config, meshData, quality, loading, panelVisible })
   )
 }
 
-// Simple HTML overlay component
-function Html({ children, position }) {
-  return (
-    <group position={position}>
-      <mesh>
-        <planeGeometry args={[4, 1]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
-      <primitive object={children} attach="userData" />
-    </group>
-  )
-}

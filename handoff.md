@@ -1,8 +1,8 @@
 # Handoff — 2026-08-11
 ## State
-- Release/Phase: R2 COMPLETE — P00-P20 DONE (main branch)
-- Gates passed: p00-p20 (21/21)
-- Regression: 343 passed, 1 skipped (full suite, 8:35) — ALL GATES CLEAN
+- Release/Phase: R2 COMPLETE — P00-P21 DONE (main branch)
+- Gates passed: p00-p21 (22/22)
+- Regression: 352 passed, 1 skipped (full suite, 8:20) — ALL GATES CLEAN
 - Fixed: p13 regression (missing __init__.py in tests/ and tests/oracle/) — all 16 p13 tests now pass
 
 ## Completed phases
@@ -26,9 +26,10 @@
 - P18 (joint retention): backend/geometry/joint_retention.py — aluminum housings, Z-bolts, countersink lips, tongue clearance holes, preload-path continuity, COTS hinge pockets, bore chain coaxiality, lip flushness
 - P19 (bilingual report): backend/report/bilingual.py — lualatex Docker container (EN/AR, Amiri font), report from gate_results, API endpoint /api/reports/{job_id}
 - P20 (shape validation): backend/geometry/validate.py — bounding box, face area, symmetry, chord, volume checks (35 tests)
+- P21 (web UI): backend/api/tessellation.py + frontend/ — React + three.js 3D viewer, LOD tessellation API, 9 tests
 
 ## R2 Complete
-All 21 phases (P00-P20) of Release 2 are complete. 21/21 gates passed.
+All 22 phases (P00-P21) of Release 2 are complete. 22/22 gates passed.
 
 ## Do not touch
 - P00-P03 gates are frozen contracts
