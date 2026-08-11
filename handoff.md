@@ -1,9 +1,9 @@
-# Handoff — 2026-08-10
+# Handoff — 2026-08-11
 ## State
 - Release/Phase: R2 COMPLETE — P00-P20 DONE (main branch)
 - Gates passed: p00-p20 (21/21)
-- Regression: all 244+ tests pass (19 gates) + p19 (9 tests) + p20 (35 tests)
-- Pre-existing regress failures (unrelated to P19/P20): p00 (DB not running), p13 (missing tests module)
+- Regression: 343 passed, 1 skipped (full suite, 8:35) — ALL GATES CLEAN
+- Fixed: p13 regression (missing __init__.py in tests/ and tests/oracle/) — all 16 p13 tests now pass
 
 ## Completed phases
 - P00-P03: Foundation, airfoils, OML loft, reference geometry (original gates)
