@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WingStructGen — 3D Wing Viewer</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; }
+      #root { display: flex; height: 100vh; }
+    </style>
+    <script type="module" crossorigin src="/assets/index-b5BiM-IB.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-CIP6LD3P.js">
+    <link rel="modulepreload" crossorigin href="/assets/three-Dk8b_Lhr.js">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Timeout: if page doesn't load in 5 seconds, show error
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (root && root.innerHTML.trim() === '') {
+          root.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;color:#ff4444;font-size:24px;display:flex;align-items:center;justify-content:center;z-index:999999;">Page still loading after 5s. Check browser Console (F12).</div>';
+        }
+      }, 5000);
+    </script>
+  </body>
+</html>
