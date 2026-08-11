@@ -516,4 +516,9 @@ def _generate_report(job_id: uuid.UUID, db_session: Session) -> bytes:
     return _gen(job_id, db_session)
 
 
+# ── P21: Tessellation viewer endpoints ──────────────────────────────────────
+
+from backend.api.tessellation import tess_router
+
+app.include_router(tess_router)
 app.include_router(router)
