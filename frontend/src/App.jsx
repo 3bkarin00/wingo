@@ -13,13 +13,19 @@ export default function App() {
     setLoading(true)
     setConfig(cfg)
     setQuality(q)
+    setMeshData(null)
     console.log('Sending config:', JSON.stringify(cfg, null, 2))
+    console.log('Quality:', q)
     try {
-      const res = await fetch('http://localhost:8000/api/wing/preview', {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
+      const res = await fetch('/api/wing/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: cfg, quality: q })
+        body: JSON.stringify({ config: cfg, quality: q }),
+        signal: controller.signal
       })
+      clearTimeout(timeoutId)
       const data = await res.json()
       console.log('API response:', data)
       if (data.success) {
@@ -29,7 +35,7 @@ export default function App() {
       }
     } catch (err) {
       console.error('Fetch error:', err)
-      alert('Preview failed: ' + err.message)
+      alert('Preview failed: ' + (err.name === 'AbortError' ? 'Timeout (try "Low" quality)' : err.message))
     } finally {
       setLoading(false)
     }

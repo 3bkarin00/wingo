@@ -89,15 +89,16 @@ export function WingViewer({ config, meshData, quality, loading }) {
         </div>
       )}
       <Canvas
-        camera={{ position: [5, 3, 5], fov: 50 }}
+        camera={{ position: [0, 1500, 2000], fov: 45 }}
         style={{ width: '100%', height: '100%' }}
       >
         <OrbitControls
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
-          minDistance={2}
-          maxDistance={50}
+          minDistance={100}
+          maxDistance={10000}
+          target={[0, 0, 0]}
         />
         <WingViewerScene meshData={meshData} quality={quality} />
       </Canvas>

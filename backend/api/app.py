@@ -32,6 +32,7 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Query,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -463,6 +464,60 @@ def list_airfoils(db: Session = Depends(_get_db)) -> list[AirfoilRow]:
     return db.query(AirfoilRow).all()
 
 
+@router.post("/airfoils/upload", response_model=AirfoilResponse)
+async def upload_airfoil(
+    file: UploadFile,
+    name: str | None = None,
+    db: Session = Depends(_get_db),
+) -> AirfoilRow:
+    """Upload a NACA .dat airfoil file and register it in the DB."""
+    if not file.filename or not file.filename.lower().endswith(".dat"):
+        raise HTTPException(400, "Only .dat files accepted")
+
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+    lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("%")]
+
+    # Parse x,y pairs (skip header lines)
+    coords = []
+    for line in lines:
+        parts = line.replace(",", " ").split()
+        if len(parts) >= 2:
+            try:
+                x, y = float(parts[0]), float(parts[1])
+                coords.append([x, y])
+            except ValueError:
+                continue
+
+    if len(coords) < 5:
+        raise HTTPException(400, f"Too few points ({len(coords)}). Need at least 5.")
+
+    # Normalize to unit chord [0,1]
+    x_min = min(c[0] for c in coords)
+    x_max = max(c[0] for c in coords)
+    chord = x_max - x_min if x_max != x_min else 1.0
+    normalized = [[(c[0] - x_min) / chord, c[1] / chord] for c in coords]
+
+    # Close the loop if not closed
+    if normalized[0] != normalized[-1]:
+        normalized.append(normalized[0])
+
+    af_name = (name or file.filename.replace(".dat", "")).lower().replace(" ", "_")
+
+    # Store in DB
+    row = AirfoilRow(
+        name=af_name,
+        source="upload",
+        raw_points={"count": len(coords), "format": "xy"},
+        normalized_points={"count": len(normalized), "points": normalized[:200]},  # cap for DB
+        format_detected="xy",
+        validation_flags={"uploaded": True, "points": len(normalized)},
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
 # ── Artifact serving ────────────────────────────────────────────────────────
 
 
@@ -530,6 +585,26 @@ def _generate_report(job_id: uuid.UUID, db_session: Session) -> bytes:
 # ── P21: Tessellation viewer endpoints ──────────────────────────────────────
 
 from backend.api.tessellation import tess_router
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 app.include_router(tess_router)
 app.include_router(router)
+
+# Serve the web UI from the frontend/dist directory
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+@app.get("/", include_in_schema=False)
+async def serve_frontend():
+    """Serve the frontend web UI."""
+    return FileResponse(FRONTEND_DIST / "index.html")
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend_static(full_path: str):
+    """Serve static assets for the frontend."""
+    file_path = FRONTEND_DIST / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    # For SPA routing, return index.html for non-existent files
+    return FileResponse(FRONTEND_DIST / "index.html")

@@ -34,11 +34,15 @@ All 22 phases (P00-P21) of Release 2 are complete. 22/22 gates passed.
 ## P21 Web UI — Known Issues & Fixes
 - **FIXED**: Vite dev server dependency pre-bundling issue with @react-three/fiber and @react-three/drei
 - **Fix**: Added `optimizeDeps.exclude: ['@react-three/fiber', '@react-three/drei']` to vite.config.js
-- **Current setup**: Production build served via `frontend/server.py` (port 3000) with CORS headers
-- API proxy: FastAPI runs on port 8000 (`uvicorn backend.api.app:app --reload --port 8000`)
+- **FIXED**: FastAPI static file serving 500 errors — FRONTEND_DIST path was 4 .parent instead of 3
+- **FIXED**: Frontend server dying after first request — added ThreadingMixIn + allow_reuse_address
+- **Current setup**: Two separate servers:
+  - Frontend (port 3000): `python frontend/server.py` (ThreadingHTTPServer with CORS)
+  - API (port 8000): `uvicorn backend.api.app:app --host 0.0.0.0 --port 8000`
+- App.jsx calls `http://localhost:8000/api/wing/preview` (direct API URL, no proxy)
 - ConfigPanel sends `output` field inside `config` dict (required by Pydantic model)
-- `tessellation.py` has duplicate `_get_db()` definition — only one needed
 - Production build split into 3 chunks: react (141KB), app (155KB), three (667KB)
+- **To start**: Run both servers; open http://localhost:3000/ in browser
 
 ## Do not touch
 - P00-P03 gates are frozen contracts
