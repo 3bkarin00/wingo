@@ -1,8 +1,9 @@
 # Handoff — 2026-08-11
 ## State
-- Release/Phase: R2 COMPLETE — P00-P21 DONE (main branch)
+- Release/Phase: R2 COMPLETE — P00-P21 DONE (main branch pushed to origin)
 - Gates passed: p00-p21 (22/22)
-- Regression: 352 passed, 1 skipped (full suite, 8:20) — ALL GATES CLEAN
+- Regression: 352 passed, 1 skipped (full suite) — ALL GATES CLEAN
+- Pushed: 13 commits to origin/main (bbb0193..4b9f278)
 - Fixed: p13 regression (missing __init__.py in tests/ and tests/oracle/) — all 16 p13 tests now pass
 
 ## Completed phases
@@ -29,20 +30,14 @@
 - P21 (web UI): backend/api/tessellation.py + frontend/ — React + three.js 3D viewer, LOD tessellation API, 9 tests
 
 ## R2 Complete
-All 22 phases (P00-P21) of Release 2 are complete. 22/22 gates passed.
+All 22 phases (P00-P21) of Release 2 are complete. 22/22 gates passed. Code pushed to origin/main.
 
-## P21 Web UI — Known Issues & Fixes
-- **FIXED**: Vite dev server dependency pre-bundling issue with @react-three/fiber and @react-three/drei
-- **Fix**: Added `optimizeDeps.exclude: ['@react-three/fiber', '@react-three/drei']` to vite.config.js
-- **FIXED**: FastAPI static file serving 500 errors — FRONTEND_DIST path was 4 .parent instead of 3
-- **FIXED**: Frontend server dying after first request — added ThreadingMixIn + allow_reuse_address
-- **Current setup**: Two separate servers:
-  - Frontend (port 3000): `python frontend/server.py` (ThreadingHTTPServer with CORS)
-  - API (port 8000): `uvicorn backend.api.app:app --host 0.0.0.0 --port 8000`
-- App.jsx calls `http://localhost:8000/api/wing/preview` (direct API URL, no proxy)
-- ConfigPanel sends `output` field inside `config` dict (required by Pydantic model)
-- Production build split into 3 chunks: react (141KB), app (155KB), three (667KB)
-- **To start**: Run both servers; open http://localhost:3000/ in browser
+## P21 Web UI — Running Setup
+- **Frontend** (port 3000): `cd frontend && npx vite --host 0.0.0.0 --port 3000`
+- **Backend** (port 8000): `uvicorn backend.api.app:app --host 0.0.0.0 --port 8000`
+- Open http://localhost:3000/ — 4-tab UI: Presets, Stations, Airfoils, Data
+- Requires `python-multipart` for file upload (installed)
+- Airfoil resolution: `naca2412` (NACA), `uiuc:name` (snapshot), `db:name` (uploaded)
 
 ## Do not touch
 - P00-P03 gates are frozen contracts
