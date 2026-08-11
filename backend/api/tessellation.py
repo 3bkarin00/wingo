@@ -147,8 +147,9 @@ async def preview_wing(req: PreviewRequest) -> TessellationResponse:
 
     try:
         config = WingConfig.model_validate(req.config)
-    except Exception:
-        raise HTTPException(422, "Invalid config")
+    except Exception as exc:
+        logger.exception("Config validation failed")
+        raise HTTPException(422, f"Invalid config: {exc}")
 
     return _build_preview_mesh(config, req.quality)
 

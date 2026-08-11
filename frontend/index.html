@@ -13,5 +13,14 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Timeout: if page doesn't load in 5 seconds, show error
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (root && root.innerHTML.trim() === '') {
+          root.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;color:#ff4444;font-size:24px;display:flex;align-items:center;justify-content:center;z-index:999999;">Page still loading after 5s. Check browser Console (F12).</div>';
+        }
+      }, 5000);
+    </script>
   </body>
 </html>

@@ -13,19 +13,22 @@ export default function App() {
     setLoading(true)
     setConfig(cfg)
     setQuality(q)
+    console.log('Sending config:', JSON.stringify(cfg, null, 2))
     try {
-      const res = await fetch('/api/wing/preview', {
+      const res = await fetch('http://localhost:8000/api/wing/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: cfg, quality: q })
       })
       const data = await res.json()
+      console.log('API response:', data)
       if (data.success) {
         setMeshData(data)
       } else {
-        alert('Preview failed: ' + (data.error || 'Unknown error'))
+        alert('Preview failed: ' + (data.error || JSON.stringify(data)))
       }
     } catch (err) {
+      console.error('Fetch error:', err)
       alert('Preview failed: ' + err.message)
     } finally {
       setLoading(false)

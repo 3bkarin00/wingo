@@ -77,6 +77,17 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="WingStructGen", version="0.4.0", lifespan=_lifespan)
+
+# Allow the web UI (port 3000) to call the API (port 8000)
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 router = APIRouter(prefix="/api")
 
 # ── Request / response models ───────────────────────────────────────────────
