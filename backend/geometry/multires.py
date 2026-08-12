@@ -26,7 +26,13 @@ from dataclasses import dataclass
 import cadquery as cq
 import numpy as np
 
-from backend.geometry.loft import build_oml, is_watertight, analytic_volume_estimate
+from backend.geometry.loft import (
+    build_oml,
+    build_oml_smooth,
+    build_wing_assembly,
+    is_watertight,
+    analytic_volume_estimate,
+)
 from backend.geometry.reference import build_reference_geometry
 from backend.geometry.sections import build_planform_sections
 from backend.schema.models import Config
@@ -50,6 +56,7 @@ class MultiResResult:
     volume: float | None = None
     face_count: int | None = None
     edge_count: int | None = None
+    pieces: dict[str, cq.Solid] | None = None  # 4-piece assembly
 
 
 def build_at_quality(
@@ -82,7 +89,7 @@ def build_at_quality(
     sections = build_planform_sections(config, resample_points=resample_points)
     metrics["sections_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
-    # Build loft
+    # Build ruled polygon loft (fast, robust — used by all gates)
     t0 = time.perf_counter()
     solid = build_oml(sections, config.planform.mirror)
     metrics["loft_ms"] = round((time.perf_counter() - t0) * 1000, 1)
@@ -109,6 +116,13 @@ def build_at_quality(
     metrics["edge_count"] = len(solid.Edges())
     metrics["total_ms"] = round(sum(v for k, v in metrics.items() if k.endswith("_ms")), 1)
 
+    # Build 4-piece assembly (production quality, always built)
+    pieces = None
+    if quality == "high":
+        t0 = time.perf_counter()
+        pieces = build_wing_assembly(sections, config.planform.mirror)
+        metrics["assembly_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+
     return MultiResResult(
         solid=solid,
         quality=quality,
@@ -116,6 +130,7 @@ def build_at_quality(
         metrics=metrics,
         watertight=watertight,
         volume=volume,
+        pieces=pieces,
     )
 
 

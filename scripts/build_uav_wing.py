@@ -139,15 +139,25 @@ def build_uav_wing() -> Path:
     output_dir = _PROJECT_ROOT / "artifacts" / "jobs" / "uav_test_wing"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Export STEP
+    # Export full OML STEP (single solid)
     step_path = output_dir / "uav_test_wing.step"
     result.solid.exportStep(str(step_path))
-    print(f"  STEP: {step_path} ({Path(step_path).stat().st_size / 1024:.0f} KB)")
+    print(f"  Full OML STEP: {step_path} ({Path(step_path).stat().st_size / 1024:.0f} KB)")
 
-    # Export STL
+    # Export full OML STL
     stl_path = output_dir / "uav_test_wing.stl"
     result.solid.exportStl(str(stl_path))
-    print(f"  STL:  {stl_path} ({Path(stl_path).stat().st_size / 1024:.0f} KB)")
+    print(f"  Full OML STL:  {stl_path} ({Path(stl_path).stat().st_size / 1024:.0f} KB)")
+
+    # Export 4-piece assembly (high quality only)
+    if result.pieces:
+        pieces_dir = output_dir / "pieces"
+        pieces_dir.mkdir(exist_ok=True)
+        for name, solid in result.pieces.items():
+            path = pieces_dir / f"uav_test_wing_{name}.step"
+            solid.exportStep(str(path))
+            size_kb = Path(path).stat().st_size / 1024
+            print(f"  Piece STEP: {path.name} ({size_kb:.0f} KB)")
 
     # Save config as JSON for reference
     config_path = output_dir / "config.json"
