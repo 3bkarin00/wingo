@@ -157,6 +157,37 @@ const PRESETS = {
     spars: [{ name: 'main', xc_root: 0.3, xc_tip: 0.3, web: { material: 'T300/epoxy', plies: 4 }, tongue: { cross_section: 'rect_hollow', engagement_mm: 10, clearance_mm: 0.3, wall_mm: 1 } }],
     ribs: { count: 11, construction: { material: 'T300/epoxy', plies: 2 }, lightening_holes: { enabled: false, margin_mm: 0 } },
     output: { formats: ['step', 'stl'] }
+  },
+  'UAV Test Wing (2.4m)': {
+    description: 'UAV test wing, CFRP NACA 2412, 7 stations, AR 8.27',
+    planform: {
+      span_mm: 2400,
+      segments: [
+        { name: 'root', y_end_frac: 0.167, dihedral_deg: 0, sweep_le_deg: 0 },
+        { name: 'inner', y_end_frac: 0.5, dihedral_deg: 3, sweep_le_deg: 5 },
+        { name: 'mid', y_end_frac: 0.833, dihedral_deg: 3, sweep_le_deg: 5 },
+        { name: 'tip', y_end_frac: 1.0, dihedral_deg: 3, sweep_le_deg: 5 }
+      ],
+      stations: [
+        { y_frac: 0.0, chord_mm: 400, twist_deg: 2.0, airfoil: 'naca2412' },
+        { y_frac: 0.167, chord_mm: 363, twist_deg: 1.8, airfoil: 'naca2412' },
+        { y_frac: 0.333, chord_mm: 326, twist_deg: 1.5, airfoil: 'naca2412' },
+        { y_frac: 0.5, chord_mm: 289, twist_deg: 1.5, airfoil: 'naca2412' },
+        { y_frac: 0.667, chord_mm: 252, twist_deg: 0.7, airfoil: 'naca2412' },
+        { y_frac: 0.833, chord_mm: 215, twist_deg: 0.3, airfoil: 'naca2412' },
+        { y_frac: 1.0, chord_mm: 180, twist_deg: 0.0, airfoil: 'naca2412' }
+      ],
+      twist_axis_xc: 0.25,
+      mirror: true
+    },
+    airfoils: { sources: ['naca4', 'uiuc'], resample_points: 199, te_min_thickness_mm: 0.8 },
+    skin: { face_sheet: { material: 'CFRP twill', plies: 4 }, core: { material: 'rohacell_31', thickness_mm: 2 }, ramp_ratio: 3 },
+    spars: [
+      { name: 'main', xc_root: 0.25, xc_tip: 0.25, web: { material: 'CFRP twill', plies: 4 }, tongue: { cross_section: 'rect_hollow', engagement_mm: 20, clearance_mm: 0.2, wall_mm: 2 } },
+      { name: 'rear', xc_root: 0.70, xc_tip: 0.70, web: { material: 'CFRP twill', plies: 3 }, tongue: { cross_section: 'rect_hollow', engagement_mm: 20, clearance_mm: 0.2, wall_mm: 2 } }
+    ],
+    ribs: { count: 9, construction: { material: 'CFRP twill', plies: 3 }, lightening_holes: { enabled: true, margin_mm: 8 } },
+    output: { formats: ['step', 'stl', 'gltf'] }
   }
 }
 
